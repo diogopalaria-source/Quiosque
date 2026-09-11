@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Mr Cheney Quiosque" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Mr. Cheney - Operação Quiosque</title>
+    <script>
+      // Early error handler to prevent cross-origin "Script error." in iframe sandboxes
+      (function() {
+        var originalOnError = window.onerror;
+        window.onerror = function(message, source, lineno, colno, error) {
+          var msg = String(message || '');
+          if (
+            msg.indexOf('Script error') !== -1 ||
+            !source ||
+            source.indexOf('extension') !== -1 ||
+            source.indexOf('chrome-extension') !== -1
+          ) {
+            console.warn('Early global script error swallowed:', message, source);
+            return true; // Suppress reporting
+          }
+          if (originalOnError) {
+            return originalOnError.apply(this, arguments);
+          }
+          return false;
+        };
+
+        window.addEventListener('error', function(event) {
+          var msg = event.message ? String(event.message) : '';
+          var src = event.filename ? String(event.filename) : '';
+          if (
+            msg.indexOf('Script error') !== -1 ||
+            !src ||
+            src.indexOf('extension') !== -1 ||
+            src.indexOf('chrome-extension') !== -1
+          ) {
+            console.warn('Early event error swallowed:', event);
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event.reason;
+          if (reason) {
+            var reasonStr = String(reason);
+            if (
+              reason.code === 'auth/popup-blocked' ||
+              reason.code === 'auth/popup-closed-by-user' ||
+              reason.code === 'auth/cancelled-popup-request' ||
+              reasonStr.indexOf('popup') !== -1 ||
+              reasonStr.indexOf('Popup') !== -1 ||
+              reasonStr.indexOf('Script error') !== -1
+            ) {
+              console.warn('Early promise rejection swallowed:', reason);
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

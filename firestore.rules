@@ -1,0 +1,250 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAuthorized() {
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Entity validation helpers
+    function isValidSale(data) {
+      return data.keys().hasAll(['mes', 'nome', 'quantidade', 'vendas', 'categoria', 'userId']) &&
+             data.mes is string &&
+             data.nome is string && data.nome.size() <= 200 &&
+             data.quantidade is number &&
+             data.vendas is number &&
+             data.categoria is string &&
+             isAuthorized();
+    }
+
+    function isValidPurchase(data) {
+      return data.keys().hasAll(['data', 'produto', 'quantidade', 'custoUnitario', 'total']) &&
+             data.data is string &&
+             data.produto is string && data.produto.size() <= 200 &&
+             data.quantidade is number &&
+             data.custoUnitario is number &&
+             data.total is number &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidBankTransaction(data) {
+      return data.keys().hasAll(['data', 'descricao', 'categoria', 'valor', 'tipo', 'userId']) &&
+             data.data is string &&
+             data.descricao is string && data.descricao.size() <= 500 &&
+             data.categoria in ['Venda', 'Custo', 'Fixa', 'Variável', 'Outros'] &&
+             data.valor is number &&
+             data.tipo in ['Entrada', 'Saída'] &&
+             isAuthorized();
+    }
+
+    function isValidFinancialRecord(data) {
+      return data.keys().hasAll(['mes', 'valor', 'tipo', 'classificacao', 'detalhes', 'observacoes', 'userId']) &&
+             data.mes is string &&
+             data.valor is number &&
+             data.tipo in ['Receita', 'Despesa'] &&
+             data.classificacao is string &&
+             data.detalhes is string &&
+             data.observacoes is string &&
+             isAuthorized();
+    }
+
+    function isValidStockItem(data) {
+      return data.keys().hasAll(['produto', 'estoqueAtual', 'custoUnitario', 'valorTotal']) &&
+             data.produto is string && data.produto.size() <= 200 &&
+             data.estoqueAtual is number &&
+             data.custoUnitario is number &&
+             data.valorTotal is number &&
+             (!('userId' in data) || data.userId is string);
+    }
+
+    function isValidWasteRecord(data) {
+      return data.keys().hasAll(['data', 'produto', 'quantidade', 'responsavel', 'acao', 'motivo', 'userId']) &&
+             data.data is string &&
+             data.produto is string && data.produto.size() <= 200 &&
+             data.quantidade is number &&
+             data.responsavel is string && data.responsavel.size() <= 100 &&
+             data.acao in ['Reuso', 'Descarte'] &&
+             data.motivo in ['café', 'qualidade', 'validade', 'vitrine'];
+    }
+
+    function isValidStaffConsumption(data) {
+      return data.keys().hasAll(['data', 'funcionario', 'produto', 'valorCheio', 'valorPago', 'status', 'userId']) &&
+             data.data is string &&
+             data.funcionario is string &&
+             data.produto is string &&
+             data.valorCheio is number &&
+             data.status in ['pendente', 'pago'];
+    }
+
+    function isValidStaffPayment(data) {
+      return data.keys().hasAll(['dataDeposito', 'funcionario', 'valorPago', 'userId', 'observacao']) &&
+             data.dataDeposito is string &&
+             data.funcionario is string &&
+             data.valorPago is number &&
+             data.observacao is string &&
+             isAuthorized();
+    }
+
+    function isValidPurchaseRequest(data) {
+      return data.keys().hasAll(['produto', 'status', 'dataSolicitacao', 'userId', 'createdAt', 'urgente', 'usuarioSolicitante']) &&
+             data.produto is string && data.produto.size() <= 200 &&
+             data.status in ['pendente', 'comprado', 'recebido', 'cancelado'] &&
+             data.dataSolicitacao is string &&
+             data.urgente is bool &&
+             data.usuarioSolicitante is string;
+    }
+
+    function isValidRecipe(data) {
+      return data.keys().hasAll(['produtoFinal', 'ingredientes', 'userId']) &&
+             data.produtoFinal is string &&
+             data.ingredientes is list &&
+             isAuthorized();
+    }
+
+    function isValidSystemLog(data) {
+      return data.keys().hasAll(['data', 'usuario', 'acao', 'tipo', 'descricao', 'detalhesRef']) &&
+             data.data is string &&
+             data.usuario is string &&
+             data.acao in ['Criação', 'Edição', 'Exclusão', 'Upload CSV'] &&
+             data.tipo is string &&
+             data.descricao is string &&
+             data.detalhesRef is map;
+    }
+
+    function isValidStaffDiscountOverride(data) {
+      return data.keys().hasAll(['productId', 'productName', 'descontoPercent']) &&
+             data.productId is string &&
+             data.productName is string &&
+             data.descontoPercent is number &&
+             isAuthorized();
+    }
+
+    function isValidTemperatureMeasurement(data) {
+      return data.keys().hasAll(['data_registro', 'hora_registro', 'id_equipamento', 'temperatura', 'funcionario', 'id_funcionario', 'status_conformidade', 'userId']) &&
+             data.data_registro is string &&
+             data.hora_registro is string &&
+             data.id_equipamento in ['Freezer', 'Geladeira', 'Frigobar'] &&
+             data.temperatura is number &&
+             data.funcionario is string && data.funcionario.size() <= 200 &&
+             data.id_funcionario is string &&
+             data.status_conformidade in ['OK', 'ALERTA'] &&
+             (!('justificativa' in data) || data.justificativa is string) &&
+             data.userId is string;
+    }
+
+    // Rules for shared access
+    match /users/shared_franquia_data {
+      allow read: if true; // Permite leitura pública do caminho compartilhado via PIN/Link
+      
+      match /sales/{saleId} {
+        allow read: if true;
+        allow create: if isAuthorized() && isValidSale(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /purchases/{purchaseId} {
+        allow read: if true;
+        allow create: if isSignedIn() && isValidPurchase(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /bankTransactions/{txId} {
+        allow read: if true;
+        allow create: if isAuthorized() && isValidBankTransaction(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /financialRecords/{recordId} {
+        allow read: if true;
+        allow create: if isAuthorized() && isValidFinancialRecord(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /stock/{stockId} {
+        allow read: if true;
+        allow create: if isSignedIn() && isValidStockItem(request.resource.data);
+        allow update: if isSignedIn();
+        allow delete: if isAuthorized();
+      }
+
+      match /wasteRecords/{wasteId} {
+        allow read: if true;
+        allow create: if isValidWasteRecord(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /staffConsumption/{id} {
+        allow read: if true;
+        allow create: if isValidStaffConsumption(request.resource.data);
+        allow update: if isAuthorized(); // Apenas Admin para marcar como pago
+        allow delete: if isAuthorized();
+      }
+
+      match /staffPayments/{id} {
+        allow read: if true;
+        allow create: if isAuthorized() && isValidStaffPayment(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /purchaseRequests/{id} {
+        allow read: if true;
+        allow create: if isValidPurchaseRequest(request.resource.data);
+        allow update: if isSignedIn() && (
+                         (request.resource.data.status == 'comprado' && isAuthorized()) || 
+                         (request.resource.data.status == 'recebido' && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'dataRecebimento']) || isAuthorized())) || 
+                         isAuthorized()
+                       );
+        allow delete: if (resource.data.status == 'pendente') || isAuthorized();
+      }
+
+      match /recipes/{id} {
+        allow read: if true;
+        allow create, update: if isValidRecipe(request.resource.data);
+        allow delete: if isAuthorized();
+      }
+
+      match /staffDiscountOverrides/{id} {
+        allow read: if true;
+        allow create, update: if isValidStaffDiscountOverride(request.resource.data);
+        allow delete: if isAuthorized();
+      }
+
+      match /systemLogs/{id} {
+        allow read: if isAuthorized();
+        allow create: if isValidSystemLog(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+
+      match /temperatureMeasurements/{id} {
+        allow read: if true;
+        allow create: if isValidTemperatureMeasurement(request.resource.data);
+        allow update: if isAuthorized();
+        allow delete: if isAuthorized();
+      }
+    }
+  }
+}

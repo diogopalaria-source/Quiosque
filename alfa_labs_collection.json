@@ -1,0 +1,1673 @@
+{
+  "info": {
+    "_postman_id": "68b2fe0a-f357-4135-8914-4396ea703024",
+    "name": "Alfa Labs API",
+    "description": "<html><head></head><body><p>Bem-vindo a documentação da API Alfa Labs! Você usará esta API para realizar uma integração entre seu sistema e a Alfa labs.<br>Precisa de ajuda ou quer tirar dúvidas? Entre em contato com nosso time pelo email <a href=\"mailto:suporte@alfalabs.com.br\">suporte@alfalabs.com.br</a>.</p>\n<p>Utilizamos o padrão <code>RESTful</code> para comunicação e o padrão de mensagens <code>JSON</code> para enviar e receber os dados.<br>Todas as respostas das requisições da API possuirão um indicador de sucesso chamado <code>success</code>. Caso o valor seja <code>false</code> um campo chamado <code>message</code> será enviado com a falha ocorrida na requisição.</p>\n<h4 id=\"limites-das-requisições\">Limites das requisições:</h4>\n<ul>\n<li>O limite máximo é 1 requisição por segundo.</li>\n</ul>\n<h4 id=\"url-base-da-api\">URL base da API:</h4>\n<ul>\n<li><a href=\"https://app.alfalabs.com.br/api/v1\">https://app.alfalabs.com.br/api/v1</a></li>\n</ul>\n<h4 id=\"receber-a-resposta-em-xml\">Receber a resposta em XML</h4>\n<ul>\n<li>Caso precisar receber as respostas no formato XML, adicione no final de qualquer endpoint <code>?format=xml</code>. Isso é válido somente para as respostas da API, o envio dos dados devem ser sempre no formato <code>JSON</code>. Segue um exemplo:<br> <code>https://app.alfalabs.com.br/api/v1/pedidos?format=xml</code></li>\n</ul>\n<hr>\n<h1 id=\"autenticacao\">Autenticação</h1>\n<p>Todas as requisições para a API devem ser feitas passando o Token de acesso no <code>header</code> da requisição.<br>Exemplo: <code>Authorization: Bearer 2aba6d5d2587d094d6807ef54df536c01fd72b03</code></p>\n<p>Todas as solicitações da API devem ser feitas por meio de HTTPS. Solicitações de API sem autenticação falharão.</p>\n<p>Para solicitar seu token, entre em contato pelo email <a href=\"mailto:suporte@alfalabs.com.br\">suporte@alfalabs.com.br</a>.</p>\n<hr>\n<h1 id=\"ambiente-de-teste\">Ambiente de Teste</h1>\n<p>Para realizar pedidos de teste acesse: <a href=\"https://teste.alfalabs.com.br\">https://teste.alfalabs.com.br</a><br>Token do ambiente de teste: <code>2aba6d5d2587d094d6807ef54df536c01fd72b03</code></p>\n<hr>\n<h1 id=\"erros\">Erros</h1>\n<table>\n    <tbody><tr>\n        <th>Código</th>\n        <th>Descrição</th>\n    </tr>\n    <tr>\n        <td>400 Bad Request</td>\n        <td>A requisição foi inválida ou não atingiu o servidor. Muitas vezes, falta um parâmetro obrigatório. </td>\n    </tr>\n    <tr>\n        <td>401 Unauthorized</td>\n        <td>As credenciais de autenticação estavam faltando ou foram incorretas.</td>\n    </tr>\n    <tr>\n        <td>429 Too Many Requests</td>\n        <td>A requisição foi rejeitada devido a limitação de taxa. Diminua o intervalo entre as requisições.</td>\n    </tr>\n    <tr>\n        <td>500 Internal Server Error</td>\n        <td>Algo está quebrado. Por favor, assegure-se de que a equipe Alfa Labs esteja investigando.</td>\n    </tr>\n</tbody></table></body></html>",
+    "schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+    "toc": [
+      {
+        "content": "Autenticação",
+        "slug": "autenticacao"
+      },
+      {
+        "content": "Ambiente de Teste",
+        "slug": "ambiente-de-teste"
+      },
+      {
+        "content": "Erros",
+        "slug": "erros"
+      }
+    ],
+    "owner": "9071122",
+    "collectionId": "68b2fe0a-f357-4135-8914-4396ea703024",
+    "publishedId": "SVtTxoKG",
+    "public": true,
+    "customColor": {
+      "top-bar": "FFFFFF",
+      "right-sidebar": "303030",
+      "highlight": "039BE5"
+    },
+    "publishDate": "2019-10-09T04:48:44.000Z"
+  },
+  "item": [
+    {
+      "name": "Pedidos",
+      "item": [
+        {
+          "name": "/pedidos",
+          "id": "576e813b-d5bc-4d44-815d-1ad07f8b1cfd",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true,
+            "disabledSystemHeaders": {}
+          },
+          "request": {
+            "auth": {
+              "type": "noauth",
+              "isInherited": false
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "type": "text",
+                "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296"
+              }
+            ],
+            "url": "https://app.alfalabs.com.br/api/v1/pedidos?filial_id=1",
+            "description": "<p>Lista todos os pedidos pendentes (com status <strong>Realizado</strong>).</p>\n<h2 id=\"path-params\">Path Params</h2>\n<p><br /><br /></p><table><tbody><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th></tr><tr><td><div>status_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador do status</div><div><div><div><div></div></div></div><div></div></div></td></tr></tbody></table>\n\n<h2 id=\"query-params\">Query Params</h2>\n<p><br /><br /></p><table><tbody><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th><th>Exemplo</th></tr><tr><td><div>filial_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador da filial</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>format</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Formato da resposta</div><div><div><div><div></div></div></div><div></div></div></td><td><div>xml, json</div><div><div><div><div></div></div></div><div></div></div></td></tr></tbody></table>\n\n<p>Para consultar apenas um status específico, adicione <strong>/status_id</strong>.</p>\n<p>Por exemplo, para consultar apenas o pedidos <strong>Finalizados</strong> o endpoint será:<br /><a href=\"https://app.alfalabs.com.br/api/v1/pedidos/4\">https://app.alfalabs.com.br/api/v1/pedidos/4</a></p>\n<table><tbody><tr><th>Status_id</th><th>Descrição</th></tr><tr><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Em Preparação</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>2</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Saiu p/ entrega</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>3</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Pronto p/ retirada</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>4</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Finalizado</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>5</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Cancelado</div><div><div><div><div></div></div></div><div></div></div></td></tr></tbody></table>\n\n<h1 id=\"response\">Response</h1>\n<p><br /><br /></p><p><br /><br /></p><table><tbody><tr><th>Parâmetro</th><th>Tipo</th><th>Descrição</th><th>Possibilidade</th></tr><tr><td><div>id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1364893</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>numero</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Número do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1091</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>data</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Data que o pedido foi realizado</div><div><div><div><div></div></div></div><div></div></div></td><td><div>2020-09-14 00:48:22</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>editado_em</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Data que o pedido foi editado</div><div><div><div><div></div></div></div><div></div></div></td><td><div>2020-09-14 00:58:22</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>status</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Status do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div><p>Realizado<br />Em preparação<br />Saiu p/ entrega<br />Pronto p/ retirada<br />Finalizado<br />Cancelado</p></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>tipo_entrega</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Tipo de entrega do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div><p>Delivery<br />Balcão</p></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>taxa_entrega</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Valor da taxa de entrega</div><div><div><div><div></div></div></div><div></div></div></td><td><div>6</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>formas_pagamento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>array</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Formas de pagamento do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div><br />{<br />\"nome\": \"Cartão de Crédito\",<br />\"obs\": \"Elo\",<br />\"valor\": 18.5,<br />\"troco\": null<br />}<br /></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>forma_pagamento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Forma de pagamento do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div><p>Dinheiro<br />Cartão de Débito<br />Cartão de Crédito<br />Voucher<br />Pix Online<br />Pagamento Online<br />Cupom Ifood</p></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>forma_pagamento_obs</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Observação da forma de pagamento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Retorna as informações do troco, bandeira do cartão ou status do pagamento online, exemplos:<br />Troco p/ $100.00<br />Sem Troco<br />Visa<br />Elo<br />Aguardando Pix<br />Recebido<br /></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>total</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Valor da total do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div>95</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>desconto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Valor de desconto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>10</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>codigo_cupom</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Código do cupom de desconto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>10OFF</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>cupom_patrocinio</div><div><div><div><div></div></div></div><div></div></div></td><td><div>array</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Quando a origem do pedido for ifood, retorna quem patrocinou o cupom de desconto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>[<br />{<br />\"nome\": \"ifood\",<br />\"valor\": 5<br />},<br />{<br />\"nome\": \"restaurante\",<br />\"valor\": 5<br />}<br />]<br /></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>origem</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Origem do pedido</div><div><div><div><div></div></div></div><div></div></div></td><td><div><p>Telefone<br />WhatsApp<br />Aplicativo<br />Site</p></div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_nome</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Nome do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Bruno Delfim</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_email</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Email do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>brndelfim@gmail.com</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_celular</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Celular do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>(47) 99674-1050</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_endereco</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Endereço do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Av Falcão</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>user_num</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Número do endereço do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>625</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>bairro_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador do bairro do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>bairro_nome</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Nome do bairro do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Centro</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>cidade_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador da cidade do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>cidade_nome</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Nome da cidade do usuário</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Porto Belo</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>filial_id</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Identificador da filial do estabelecimento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>filial_nome</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Nome da filial do estabelecimento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Porto Belo</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>itens</div><div><div><div><div></div></div></div><div></div></div></td><td><div>array</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Itens do pedido</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>codigo_ref</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Código de referência do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>025</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>nome</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Nome do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Monte seu Lanche</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>qtd</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Quantidade do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>2</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>preco</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Preço do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>21</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>sub_total</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Subtotal do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>42</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>obs</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Observação do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Tirar a cebola</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>complementos_obj</div><div><div><div><div></div></div></div><div></div></div></td><td><div>array</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Complementos do produto</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>titulo</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Título do complemento do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Ponto da carne</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>cobra_maior_valor</div><div><div><div><div></div></div></div><div></div></div></td><td><div>boolean</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Cobrar maior valor (Sabores Pizza)</div><div><div><div><div></div></div></div><div></div></div></td><td><div>false</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>cobra_media_valor</div><div><div><div><div></div></div></div><div></div></div></td><td><div>boolean</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Cobrar média valor (Sabores Pizza)</div><div><div><div><div></div></div></div><div></div></div></td><td><div>false</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>opcoes</div><div><div><div><div></div></div></div><div></div></div></td><td><div>array</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Opções do complemento do produto</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Ponto da carne</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>titulo</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Título da opção do complemento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Ao Ponto</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>codigo_ref</div><div><div><div><div></div></div></div><div></div></div></td><td><div>string</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Código de referência da opção do complemento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>12</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>qtd</div><div><div><div><div></div></div></div><div></div></div></td><td><div>integer</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Quantidade da opção do complemento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>1</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>preco_un</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Preço da opção do complemento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>0</div><div><div><div><div></div></div></div><div></div></div></td></tr><tr><td><div>sub_total</div><div><div><div><div></div></div></div><div></div></div></td><td><div>number</div><div><div><div><div></div></div></div><div></div></div></td><td><div>Subtotal da opção do complemento</div><div><div><div><div></div></div></div><div></div></div></td><td><div>0</div><div><div><div><div></div></div></div><div></div></div></td></tr></tbody></table>",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "pedidos"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [
+                {
+                  "key": "filial_id",
+                  "value": "1"
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "f33352d8-1e78-493e-8238-f629f8ebdc03",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "type": "text",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/pedidos"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 14 Sep 2020 04:03:30 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=3c7db66465a76aeabb1e8a775ea0154393da77fc; path=/; HttpOnly"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"data\": [\n        {\n            \"id\": 1364893,\n            \"numero\": 1091,\n            \"data\": \"2020-09-14 00:48:22\",\n            \"status\": \"Realizado\",\n            \"tipo_entrega\": \"Delivery\",\n            \"taxa_entrega\": 6,\n            \"forma_pagamento\": \"Dinheiro\",\n            \"forma_pagamento_obs\": \"Troco p/ $100.00\",\n            \"total\": 95,\n            \"desconto\": 0,\n            \"codigo_cupom\": null,\n            \"obs\": null,\n            \"origem\": \"Telefone\",\n            \"user_id\": 1,\n            \"user_nome\": \"Bruno Delfim\",\n            \"user_email\": \"brndelfim@gmail.com\",\n            \"user_celular\": \"(47) 99674-1050\",\n            \"user_telefone\": \"\",\n            \"user_telefone2\": \"\",\n            \"user_cpf\": null,\n            \"user_endereco\": \"Av Falcão\",\n            \"user_num\": \"625\",\n            \"user_complemento\": \"\",\n            \"user_referencia\": \"\",\n            \"user_cep\": \"\",\n            \"bairro_id\": 0,\n            \"bairro_nome\": null,\n            \"cidade_id\": 0,\n            \"cidade_nome\": null,\n            \"filial_id\": 1,\n            \"filial_nome\": \"Porto Belo\",\n            \"itens\": [\n                {\n                    \"codigo_ref\": null,\n                    \"nome\": \"Monte seu Lanche\",\n                    \"qtd\": 1,\n                    \"preco\": 21,\n                    \"sub_total\": 21,\n                    \"obs\": null,\n                    \"sabores\": \"\",\n                    \"adicionais\": \"\",\n                    \"complementos\": [\n                        \"Carne: Hamburguer\",\n                        \"Saladas: Alface, Tomate, Cebola\",\n                        \"Adicionais: 2x Bacon, 1x Calabresa\"\n                    ],\n                    \"complementos_obj\": [\n                        {\n                            \"titulo\": \"Carne\",\n                            \"cobra_maior_valor\": false,\n                            \"cobra_media_valor\": false,\n                            \"opcoes\": [\n                                {\n                                    \"titulo\": \"Hamburguer\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 1,\n                                    \"preco_un\": 0,\n                                    \"sub_total\": 0\n                                }\n                            ]\n                        },\n                        {\n                            \"titulo\": \"Saladas\",\n                            \"cobra_maior_valor\": false,\n                            \"cobra_media_valor\": false,\n                            \"opcoes\": [\n                                {\n                                    \"titulo\": \"Alface\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 1,\n                                    \"preco_un\": 0,\n                                    \"sub_total\": 0\n                                },\n                                {\n                                    \"titulo\": \"Tomate\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 1,\n                                    \"preco_un\": 0,\n                                    \"sub_total\": 0\n                                },\n                                {\n                                    \"titulo\": \"Cebola\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 1,\n                                    \"preco_un\": 0,\n                                    \"sub_total\": 0\n                                }\n                            ]\n                        },\n                        {\n                            \"titulo\": \"Adicionais\",\n                            \"cobra_maior_valor\": false,\n                            \"cobra_media_valor\": false,\n                            \"opcoes\": [\n                                {\n                                    \"titulo\": \"Bacon\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 2,\n                                    \"preco_un\": 2,\n                                    \"sub_total\": 4\n                                },\n                                {\n                                    \"titulo\": \"Calabresa\",\n                                    \"codigo_ref\": null,\n                                    \"qtd\": 1,\n                                    \"preco_un\": 2,\n                                    \"sub_total\": 2\n                                }\n                            ]\n                        }\n                    ],\n                    \"categoria\": \"Promoção\"\n                },\n                {\n                    \"codigo_ref\": null,\n                    \"nome\": \"Pizza Grande\",\n                    \"qtd\": 1,\n                    \"preco\": 50,\n                    \"sub_total\": 50,\n                    \"obs\": \"Sem cebola\",\n                    \"sabores\": \"1/3 Calabresa, 1/3 Frango c/ Catupiry, 1/3 Marguerita\",\n                    \"adicionais\": \"Borda Catupiry, Massa Fina, Bacon, Catupiry\",\n                    \"complementos\": [],\n                    \"complementos_obj\": null,\n                    \"categoria\": \"Pizzas\"\n                },\n                {\n                    \"codigo_ref\": null,\n                    \"nome\": \"Coca-cola 2L\",\n                    \"qtd\": 2,\n                    \"preco\": 9,\n                    \"sub_total\": 18,\n                    \"obs\": null,\n                    \"sabores\": \"\",\n                    \"adicionais\": \"\",\n                    \"complementos\": [],\n                    \"complementos_obj\": null,\n                    \"categoria\": \"Bebidas\"\n                }\n            ]\n        }\n    ]\n}"
+            },
+            {
+              "id": "9df687b6-9ab9-43ef-bc85-d471e6f70940",
+              "name": "Falha",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "type": "text",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "disabled": true
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/pedidos"
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 14 Sep 2020 04:07:33 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=3c7db66465a76aeabb1e8a775ea0154393da77fc; path=/; HttpOnly"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"Token inválido. Por favor defina o Token no header.\"\n}"
+            }
+          ],
+          "_postman_id": "576e813b-d5bc-4d44-815d-1ad07f8b1cfd"
+        },
+        {
+          "name": "/pedidos/{{pedido_id}}/{{status_id}}",
+          "id": "fe20d820-3383-4fb5-b351-34e55ed5deb8",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                "type": "text"
+              }
+            ],
+            "url": "https://app.alfalabs.com.br/api/v1/pedidos/508953/1",
+            "description": "<p>Edita o status de um pedido, o status_id pode ser:</p>\n<table>\n    <tr>\n        <th>Status_id</th>\n        <th>Descrição</th>\n    </tr>\n    <tr>\n        <td>1</td>\n        <td>Em preparação</td>\n    </tr>\n    <tr>\n        <td>2</td>\n        <td>Saiu p/ entrega</td>\n    </tr>\n    <tr>\n        <td>3</td>\n        <td>Pronto p/ retirada</td>\n    </tr>\n    <tr>\n        <td>4</td>\n        <td>Finalizado</td>\n    </tr>\n    <tr>\n        <td>5</td>\n        <td>Cancelado</td>\n    </tr>\n</table>",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "pedidos",
+                "508953",
+                "1"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "50567108-cf80-4106-93d5-ff66d8577a3b",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 2aba6d5d2587d094d6807ef54df536c01fd72b03",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/pedidos/508953/1"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Wed, 09 Oct 2019 05:19:56 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "ci_session=6b21a0ef10c4577eda8bb66355888bfd372decb5; expires=Wed, 09-Oct-2019 15:19:55 GMT; Max-Age=36000; path=/; HttpOnly"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"data\": \"Status do pedido alterado com sucesso.\"\n}"
+            }
+          ],
+          "_postman_id": "fe20d820-3383-4fb5-b351-34e55ed5deb8"
+        },
+        {
+          "name": "/pedidos",
+          "id": "332d25dc-ce54-4915-a413-3b7ba5e20e73",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": {
+                "basicConfig": [
+                  {
+                    "key": "token",
+                    "value": "<token>"
+                  }
+                ]
+              },
+              "isInherited": false
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"filial_id\": 1,\r\n  \"tipo_entrega\": \"Balcão\",\r\n  \"senha\": \"1234\", //opcional\r\n  \"acrescimo\": 0, //opcional\r\n  \"desconto\": 5, //opcional\r\n  \"total\": 55,\r\n  \"obs\": null, //opcional\r\n  \"origem\": \"Telefone\",\r\n  \"formas_pagamento\":  [\r\n    {\"nome\": \"Dinheiro\", \"valor\": 10.50, \"troco_para\": 50},\r\n    {\"nome\": \"Pix\", \"valor\": 10, \"obs\": \"Chave CNPJ xxx\"},\r\n    {\"nome\": \"Cartão de Crédito\", \"valor\": 10, \"obs\": \"Visa\", \r\n        \"tef\": {\"cnpj_credenciadora\": \"08561701000101\", \"num_autorizacao\": \"990234\", \"nsu\": \"000004\"} \r\n    },\r\n    {\"nome\": \"Cartão de Débito\", \"valor\": 10, \"obs\": \"Visa electron\"},\r\n    {\"nome\": \"Voucher\", \"valor\": 14.50, \"obs\": \"Alelo Refeição\"}\r\n  ],\r\n  \"cliente\": { // opcional\r\n    \"id\": 2, // envie o id ou os dados abaixo \r\n    \"nome\": \"John Doe\",\r\n    \"email\": \"johndoe@alfamail.com\",\r\n    \"celular\": \"47988419082\", \r\n    \"cpf_cnpj\": \"12345678912\" // envie se tiver cpf na nota\r\n  },\r\n  \"itens\": [\r\n    {\r\n      \"codigo_ref\": \"21\", // obrigatório para emitir NFCe\r\n      \"nome\": \"X-Bacon\",\r\n      \"qtd\": 2,\r\n      \"preco_un\": 30,\r\n      \"sub_total\": 60,\r\n      \"obs\": null,\r\n      \"categoria\": \"Lanches\",\r\n      \"complementos\": [ // opcional\r\n        {\r\n          \"titulo\": \"Adicionais\",\r\n          \"has_fracao\": true, // opcional (usado em pizzas, para exibir 1/2 Calabresa e 1/2 Mussarela na impressão)\r\n          \"opcoes\": [\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Calabresa\",\r\n              \"qtd\": 2,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 4\r\n            },\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Cheddar\",\r\n              \"qtd\": 1,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 2\r\n            }\r\n          ]\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "https://app.alfalabs.com.br/api/v1/pedidos",
+            "description": "<p>Insere um novo pedido</p>\n",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "pedidos"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "6d0f1f89-89eb-4f01-8ef7-532b84a1ef69",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"filial_id\": 1,\r\n  \"tipo_entrega\": \"Balcão\",\r\n  \"senha\": \"1234\", //opcional\r\n  \"acrescimo\": 0, //opcional\r\n  \"desconto\": 5, //opcional\r\n  \"total\": 55,\r\n  \"obs\": null, //opcional\r\n  \"origem\": \"Telefone\",\r\n  \"formas_pagamento\":  [\r\n    {\"nome\": \"Dinheiro\", \"valor\": 10.50, \"troco_para\": 50},\r\n    {\"nome\": \"Pix\", \"valor\": 10, \"obs\": \"Chave CNPJ xxx\"},\r\n    {\"nome\": \"Cartão de Crédito\", \"valor\": 10, \"obs\": \"Visa\", \"tef\": {\"cnpj_credenciadora\": \"08561701000101\", \"num_autorizacao\": \"990234\", \"nsu\": \"000004\"} },\r\n    {\"nome\": \"Cartão de Débito\", \"valor\": 10, \"obs\": \"Visa electron\"},\r\n    {\"nome\": \"Voucher\", \"valor\": 14.50, \"obs\": \"Alelo Refeição\"}\r\n  ],\r\n  \"cliente\": { // opcional\r\n    \"id\": 2, // envie o id ou os dados abaixo \r\n    \"nome\": \"John Doe\",\r\n    \"email\": \"johndoe@alfamail.com\",\r\n    \"celular\": \"47988419082\", \r\n    \"cpf_cnpj\": \"12345678912\" // envie se tiver cpf na nota\r\n  },\r\n  \"itens\": [\r\n    {\r\n      \"codigo_ref\": \"21\", // obrigatório para emitir NFCe\r\n      \"nome\": \"X-Bacon\",\r\n      \"qtd\": 2,\r\n      \"preco_un\": 30,\r\n      \"sub_total\": 60,\r\n      \"obs\": null,\r\n      \"categoria\": \"Lanches\",\r\n      \"complementos\": [ // opcional\r\n        {\r\n          \"titulo\": \"Adicionais\",\r\n          \"opcoes\": [\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Calabresa\",\r\n              \"qtd\": 2,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 4\r\n            },\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Cheddar\",\r\n              \"qtd\": 1,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 2\r\n            }\r\n          ]\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "https://app.alfalabs.com.br/api/v1/pedidos"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 26 Jan 2024 15:12:55 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=694cda35737b36e28c42e98cf3a28e2ff865bdd8; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"id\": 7937003,\n    \"numero\": 2334,\n    \"data\": \"2024-01-26 12:12:54\"\n}"
+            },
+            {
+              "id": "92ad592a-e28d-4276-a36d-5aa0e2659aba",
+              "name": "Falha",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"filial_id\": 1,\r\n  \"tipo_entrega\": \"Balcão\",\r\n  \"senha\": \"1234\", //opcional\r\n  \"acrescimo\": 0, //opcional\r\n  \"desconto\": 5, //opcional\r\n  \"total\": 56,\r\n  \"obs\": null, //opcional\r\n  \"origem\": \"Telefone\",\r\n  \"formas_pagamento\":  [\r\n    {\"nome\": \"Dinheiro\", \"valor\": 10.50, \"troco_para\": 50},\r\n    {\"nome\": \"Pix\", \"valor\": 10, \"obs\": \"Chave CNPJ xxx\"},\r\n    {\"nome\": \"Cartão de Crédito\", \"valor\": 10, \"obs\": \"Visa\"},\r\n    {\"nome\": \"Cartão de Débito\", \"valor\": 10, \"obs\": \"Visa electron\"},\r\n    {\"nome\": \"Voucher\", \"valor\": 14.50, \"obs\": \"Alelo Refeição\"}\r\n  ],\r\n  \"cliente\": { // opcional\r\n    \"id\": 2, // envie o id ou os dados abaixo \r\n    \"nome\": \"John Doe\",\r\n    \"email\": \"johndoe@alfamail.com\",\r\n    \"celular\": \"47988419082\", \r\n    \"cpf_cnpj\": \"12345678912\" // envie se tiver cpf na nota\r\n  },\r\n  \"itens\": [\r\n    {\r\n      \"codigo_ref\": \"21\", // obrigatório para emitir NFCe\r\n      \"nome\": \"X-Bacon\",\r\n      \"qtd\": 2,\r\n      \"preco_un\": 30,\r\n      \"sub_total\": 60,\r\n      \"obs\": null,\r\n      \"categoria\": \"Lanches\",\r\n      \"complementos\": [ // opcional\r\n        {\r\n          \"titulo\": \"Adicionais\",\r\n          \"opcoes\": [\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Calabresa\",\r\n              \"qtd\": 2,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 4\r\n            },\r\n            {\r\n              \"codigo_ref\": null,\r\n              \"titulo\": \"Cheddar\",\r\n              \"qtd\": 1,\r\n              \"preco_un\": 2,\r\n              \"sub_total\": 2\r\n            }\r\n          ]\r\n        }\r\n      ]\r\n    }\r\n  ]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": "https://app.alfalabs.com.br/api/v1/pedidos"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Fri, 26 Jan 2024 15:13:47 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=dd7ee97d318cfa30a72b05ccdb402bfddfb1780e; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"Soma dos itens difere do total pedido\"\n}"
+            }
+          ],
+          "_postman_id": "332d25dc-ce54-4915-a413-3b7ba5e20e73"
+        }
+      ],
+      "id": "00625162-7c3c-4a16-8b6a-5eefcd8c7405",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "id": "3a585c8a-3d28-477b-a0bd-b23d97805072",
+            "type": "text/javascript",
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "id": "0cc7dba9-08e0-4136-82ae-45bf9fa8f7b1",
+            "type": "text/javascript",
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ],
+      "_postman_id": "00625162-7c3c-4a16-8b6a-5eefcd8c7405",
+      "description": ""
+    },
+    {
+      "name": "NFC",
+      "item": [
+        {
+          "name": "/nfc/{{pedido_id}}",
+          "id": "cc6ec866-23f2-4f28-a3b6-18b6f8e2b587",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                "type": "text"
+              }
+            ],
+            "url": "https://app.alfalabs.com.br/api/v1/nfc/7967724",
+            "description": "<p>Consulta a NFC do pedido</p>\n",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "nfc",
+                "7967724"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "a2e8f5f1-f533-4805-afe3-a916a60b0d99",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7968774"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:43:02 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=3f4c5ebbef82041a8b1c448a37597f91cd6e5169; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"data_emissao\": \"2024-01-29 14:41:13\",\n        \"status_nfc\": \"autorizado\",\n        \"numero_nfc\": \"119\",\n        \"link_danfe\": \"https://api.focusnfe.com.br/notas_fiscais_consumidor/NFe42240114682664000192650010000001191315874073.html\",\n        \"link_xml\": \"https://api.focusnfe.com.br/arquivos_development/14682664000192_29862/202401/XMLs/42240114682664000192650010000001191315874073-nfe.xml\",\n        \"justificativa_cancelamento\": null\n    }\n}"
+            },
+            {
+              "id": "185d84f7-e564-4bb4-b0eb-f1b2bf0150cb",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7967724"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:45:38 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=8f4a318bde72a44c60d131900c074128a065a721; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"data_emissao\": \"2024-01-29 14:36:47\",\n        \"status_nfc\": \"cancelado\",\n        \"numero_nfc\": \"118\",\n        \"link_danfe\": \"https://api.focusnfe.com.br/arquivos_development/14682664000192_29862/202401/XMLs/42240114682664000192650010000001181499904682-can.xml\",\n        \"link_xml\": \"https://api.focusnfe.com.br/arquivos_development/14682664000192_29862/202401/XMLs/42240114682664000192650010000001181499904682-can.xml\",\n        \"justificativa_cancelamento\": \"NFC emitida em ambiente de teste\"\n    }\n}"
+            },
+            {
+              "id": "f49982a6-fc41-48e8-92e8-158260bca4fb",
+              "name": "Erro",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/1"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:44:17 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=165bf767abcde8c704ff3e2ff322ce6f5a8fe17e; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"NFCe não foi emitida\"\n}"
+            }
+          ],
+          "_postman_id": "cc6ec866-23f2-4f28-a3b6-18b6f8e2b587"
+        },
+        {
+          "name": "/nfc/{{pedido_id}}",
+          "id": "6f99ada0-080e-465e-97b7-b99e91407b0b",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                "type": "text"
+              }
+            ],
+            "url": "https://app.alfalabs.com.br/api/v1/nfc/7968775",
+            "description": "<p>Emite uma NFC</p>\n",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "nfc",
+                "7968775"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "7809cf12-4f85-4e67-ad0a-3e65060fffc4",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7968774"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:41:15 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=607710afd3011cd68b9639e10a6938fa3834a651; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"status_nfc\": \"autorizado\",\n        \"numero_nfc\": \"119\",\n        \"link_danfe\": \"https://api.focusnfe.com.br/notas_fiscais_consumidor/NFe42240114682664000192650010000001191315874073.html\",\n        \"link_xml\": \"https://api.focusnfe.com.br/arquivos_development/14682664000192_29862/202401/XMLs/42240114682664000192650010000001191315874073-nfe.xml\",\n        \"data_emissao\": \"2024-01-29 14:41:13\"\n    }\n}"
+            },
+            {
+              "id": "4876db82-3c41-4de5-b549-1f903b3ba211",
+              "name": "Erro",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7968774"
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:41:31 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=db61fdab4bde54f558d81fe0d66e3db5a5b23d9d; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"Já existe uma NFC autorizado, no pedido #2341\",\n    \"data\": {\n        \"data_emissao\": \"2024-01-29 14:41:13\",\n        \"status_nfc\": \"autorizado\",\n        \"numero_nfc\": \"119\",\n        \"link_danfe\": \"https://api.focusnfe.com.br/notas_fiscais_consumidor/NFe42240114682664000192650010000001191315874073.html\",\n        \"link_xml\": \"https://api.focusnfe.com.br/arquivos_development/14682664000192_29862/202401/XMLs/42240114682664000192650010000001191315874073-nfe.xml\",\n        \"justificativa_cancelamento\": null\n    }\n}"
+            },
+            {
+              "id": "280e247b-cbb5-4b97-98ca-aa086afe355c",
+              "name": "Erro",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7968774"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:40:22 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=8278c1de548bcef9df6361405d4daf905bc330ef; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"Porção de Fritas sem código ncm cadastrado\"\n}"
+            },
+            {
+              "id": "d6677128-43db-41ec-9a73-06a112355b2f",
+              "name": "Erro",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer 7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296",
+                    "type": "text"
+                  }
+                ],
+                "url": "https://app.alfalabs.com.br/api/v1/nfc/7968775"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Server",
+                  "value": "nginx/1.10.3 (Ubuntu)"
+                },
+                {
+                  "key": "Date",
+                  "value": "Mon, 29 Jan 2024 17:43:24 GMT"
+                },
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=UTF-8"
+                },
+                {
+                  "key": "Transfer-Encoding",
+                  "value": "chunked"
+                },
+                {
+                  "key": "Connection",
+                  "value": "keep-alive"
+                },
+                {
+                  "key": "Access-Control-Allow-Origin",
+                  "value": "*.alfalabs.com.br"
+                },
+                {
+                  "key": "Access-Control-Allow-Methods",
+                  "value": "GET, POST, PUT, DELETE, OPTIONS"
+                },
+                {
+                  "key": "Access-Control-Allow-Headers",
+                  "value": "*"
+                },
+                {
+                  "key": "X-Frame-Options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=7ac79613cbafd746785b11f5fb1f82e187cbf689; path=/; HttpOnly"
+                },
+                {
+                  "key": "Set-Cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "Expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "Pragma",
+                  "value": "no-cache"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": false,\n    \"message\": \"pedido_id não encontrado\"\n}"
+            }
+          ],
+          "_postman_id": "6f99ada0-080e-465e-97b7-b99e91407b0b"
+        }
+      ],
+      "id": "8c44937d-89f1-4114-836d-ada11725f7dc",
+      "_postman_id": "8c44937d-89f1-4114-836d-ada11725f7dc",
+      "description": ""
+    },
+    {
+      "name": "Financeiro",
+      "item": [
+        {
+          "name": "/contas",
+          "id": "c6dd5863-028d-451c-9d59-2585cfd736ab",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": {
+                "basicConfig": [
+                  {
+                    "key": "token",
+                    "value": "<token>"
+                  }
+                ]
+              },
+              "isInherited": false
+            },
+            "method": "GET",
+            "header": [],
+            "url": "https://app.alfalabs.com.br/api/v1/contas?operacao=P&date_type=V&start_date=2025-06-18&end_date=2025-06-19&status=A&fiilial_id=1",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "contas"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [
+                {
+                  "description": {
+                    "content": "<p>opcional, P (pagar) ou R (receber) padrão retorna ambos</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "operacao",
+                  "value": "P"
+                },
+                {
+                  "description": {
+                    "content": "<p>opcional, filtrar data por V (vencimento), E (emissão) ou L (liquidação), valor padrão V</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "date_type",
+                  "value": "V"
+                },
+                {
+                  "description": {
+                    "content": "<p>data ínicio</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "start_date",
+                  "value": "2025-06-18"
+                },
+                {
+                  "description": {
+                    "content": "<p>data fim</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "end_date",
+                  "value": "2025-06-19"
+                },
+                {
+                  "description": {
+                    "content": "<p>opcional, status da conta A (em aberto), C (cancelada) ou P (paga)</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "status",
+                  "value": "A"
+                },
+                {
+                  "description": {
+                    "content": "<p>opcional</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "fiilial_id",
+                  "value": "1"
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "d532b1e5-90e9-45d9-bf88-2d31cc0573de",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "https://app.alfalabs.com.br/api/v1/contas?operacao=P&date_type=V&start_date=2025-06-18&end_date=2025-06-19&status=A&fiilial_id=1",
+                  "protocol": "https",
+                  "host": [
+                    "app",
+                    "alfalabs",
+                    "com",
+                    "br"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "contas"
+                  ],
+                  "query": [
+                    {
+                      "key": "operacao",
+                      "value": "P",
+                      "description": "opcional, P (pagar) ou R (receber) padrão retorna ambos"
+                    },
+                    {
+                      "key": "date_type",
+                      "value": "V",
+                      "description": "opcional, filtrar data por V (vencimento), E (emissão) ou L (liquidação), valor padrão V"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "2025-06-18",
+                      "description": "data ínicio"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2025-06-19",
+                      "description": "data fim"
+                    },
+                    {
+                      "key": "status",
+                      "value": "A",
+                      "description": "opcional, status da conta A (em aberto), C (cancelada) ou P (paga)"
+                    },
+                    {
+                      "key": "fiilial_id",
+                      "value": "1",
+                      "description": "opcional"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Thu, 19 Jun 2025 04:10:16 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "Apache/2.4.33 (Win64) PHP/7.0.29"
+                },
+                {
+                  "key": "vary",
+                  "value": "Authorization"
+                },
+                {
+                  "key": "x-powered-by",
+                  "value": "PHP/7.0.29"
+                },
+                {
+                  "key": "access-control-allow-origin",
+                  "value": "*"
+                },
+                {
+                  "key": "access-control-allow-methods",
+                  "value": "POST, GET, OPTIONS, DELETE, PUT"
+                },
+                {
+                  "key": "access-control-allow-headers",
+                  "value": "x-requested-with, Content-Type, origin, authorization, accept, client-security-token"
+                },
+                {
+                  "key": "x-frame-options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "set-cookie",
+                  "value": "PHPSESSID=632bde70535f44e02d3a6aad689644e8be3fe941; path=/; HttpOnly"
+                },
+                {
+                  "key": "set-cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "x-ua-compatible",
+                  "value": "IE=Edge,chrome=1"
+                },
+                {
+                  "key": "content-length",
+                  "value": "545"
+                },
+                {
+                  "key": "connection",
+                  "value": "close"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json; charset=UTF-8"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "[\n    {\n        \"id\": \"490\",\n        \"operacao\": \"Pagar\",\n        \"status\": \"Em aberto\",\n        \"emissao\": \"2025-06-19 00:00:00\",\n        \"vencimento\": \"2025-06-19 23:52:25\",\n        \"liquidacao\": null,\n        \"nr_doc\": null,\n        \"descricao\": \"Tarifa ref pedido #1671 - Pix Online\",\n        \"valor\": \"0.53\",\n        \"user_id\": \"426613\",\n        \"user_nome\": \"Bruno Delfim\",\n        \"plano_conta_id\": \"22\",\n        \"plano_conta\": \"Tarifa pix\",\n        \"conta_bancaria_id\": \"15\",\n        \"conta_bancaria\": \"Cora\",\n        \"filial_id\": \"1\",\n        \"filial_nome\": \"1. Porto Belo\",\n        \"cadastrado_por\": \"Master\",\n        \"cancelado_por\": null,\n        \"cancelado_em\": null,\n        \"pedido_id\": \"1637977\",\n        \"pedido_num\": \"1671\",\n        \"caixa_mov_descricao\": null\n    }\n]"
+            }
+          ],
+          "_postman_id": "c6dd5863-028d-451c-9d59-2585cfd736ab"
+        }
+      ],
+      "id": "312071b6-b4f0-493b-b96b-1c9afd6e56e8",
+      "_postman_id": "312071b6-b4f0-493b-b96b-1c9afd6e56e8",
+      "description": ""
+    },
+    {
+      "name": "Relatórios",
+      "item": [
+        {
+          "name": "/relatorios/ranking",
+          "id": "ad1ca987-d775-4b5d-ae94-da4dfaec2e54",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": {
+                "basicConfig": [
+                  {
+                    "key": "token",
+                    "value": "<token>"
+                  }
+                ]
+              },
+              "isInherited": false
+            },
+            "method": "GET",
+            "header": [],
+            "url": "https://app.alfalabs.com.br/api/v1/relatorios/ranking?pagina=1&start_date=2025-06-01&end_date=2025-06-30",
+            "urlObject": {
+              "protocol": "https",
+              "path": [
+                "api",
+                "v1",
+                "relatorios",
+                "ranking"
+              ],
+              "host": [
+                "app",
+                "alfalabs",
+                "com",
+                "br"
+              ],
+              "query": [
+                {
+                  "description": {
+                    "content": "<p>opcional, padrão 1</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "pagina",
+                  "value": "1"
+                },
+                {
+                  "description": {
+                    "content": "<p>data início</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "start_date",
+                  "value": "2025-06-01"
+                },
+                {
+                  "description": {
+                    "content": "<p>data fim</p>\n",
+                    "type": "text/plain"
+                  },
+                  "key": "end_date",
+                  "value": "2025-06-30"
+                }
+              ],
+              "variable": []
+            }
+          },
+          "response": [
+            {
+              "id": "795d528c-3e5b-43f9-91ea-856a8d064c62",
+              "name": "Sucesso",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "https://app.alfalabs.com.br/api/v1/relatorios/ranking?pagina=1&start_date=2025-06-01&end_date=2025-06-30",
+                  "protocol": "https",
+                  "host": [
+                    "app",
+                    "alfalabs",
+                    "com",
+                    "br"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "relatorios",
+                    "ranking"
+                  ],
+                  "query": [
+                    {
+                      "key": "pagina",
+                      "value": "1",
+                      "description": "opcional, padrão 1"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "2025-06-01"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2025-06-30"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "date",
+                  "value": "Thu, 19 Jun 2025 04:47:15 GMT"
+                },
+                {
+                  "key": "server",
+                  "value": "Apache/2.4.33 (Win64) PHP/7.0.29"
+                },
+                {
+                  "key": "vary",
+                  "value": "Authorization"
+                },
+                {
+                  "key": "x-powered-by",
+                  "value": "PHP/7.0.29"
+                },
+                {
+                  "key": "access-control-allow-origin",
+                  "value": "*"
+                },
+                {
+                  "key": "access-control-allow-methods",
+                  "value": "POST, GET, OPTIONS, DELETE, PUT"
+                },
+                {
+                  "key": "access-control-allow-headers",
+                  "value": "x-requested-with, Content-Type, origin, authorization, accept, client-security-token"
+                },
+                {
+                  "key": "x-frame-options",
+                  "value": "sameorigin"
+                },
+                {
+                  "key": "set-cookie",
+                  "value": "PHPSESSID=792594a867371d4e81c726c9b114392dacbaaac4; path=/; HttpOnly"
+                },
+                {
+                  "key": "set-cookie",
+                  "value": "PHPSESSID=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT; Max-Age=0; path=/; HttpOnly"
+                },
+                {
+                  "key": "expires",
+                  "value": "Thu, 19 Nov 1981 08:52:00 GMT"
+                },
+                {
+                  "key": "cache-control",
+                  "value": "no-store, no-cache, must-revalidate"
+                },
+                {
+                  "key": "pragma",
+                  "value": "no-cache"
+                },
+                {
+                  "key": "x-ua-compatible",
+                  "value": "IE=Edge,chrome=1"
+                },
+                {
+                  "key": "content-length",
+                  "value": "343"
+                },
+                {
+                  "key": "connection",
+                  "value": "close"
+                },
+                {
+                  "key": "content-type",
+                  "value": "application/json; charset=UTF-8"
+                }
+              ],
+              "cookie": [],
+              "responseTime": null,
+              "body": "{\n    \"success\": true,\n    \"pagina_atual\": 1,\n    \"qtd_paginas\": 1,\n    \"data\": [\n        {\n            \"filial_id\": \"1\",\n            \"filial\": \"1. Porto Belo\",\n            \"data_cadastro\": \"2025-01-01 00:00:00\",\n            \"lifetime_meses\": \"5.6\",\n            \"total_vendas\": \"2260.46\",\n            \"taxa_entrega\": \"5.00\",\n            \"total_faturamento\": \"2265.46\",\n            \"qtd_pedidos\": \"145\",\n            \"ticket_medio\": \"15.59\",\n            \"taxa_royalties_percentual\": \"5.00\",\n            \"taxa_royalties\": \"113.02\"\n        }\n    ]\n}"
+            }
+          ],
+          "_postman_id": "ad1ca987-d775-4b5d-ae94-da4dfaec2e54"
+        }
+      ],
+      "id": "4265afbf-e69c-4a87-b971-7f932c974aba",
+      "_postman_id": "4265afbf-e69c-4a87-b971-7f932c974aba",
+      "description": ""
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "id": "26e2e8b3-43c8-4cda-ac09-f3a86b87ede9",
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "id": "07d47173-22f4-460c-8e38-d18ec6be89a4",
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "TOKEN_DE_ACESSO",
+      "value": "7b3d2388f84fb1916cedf2a1f9b9af53a9e5d296"
+    }
+  ]
+}

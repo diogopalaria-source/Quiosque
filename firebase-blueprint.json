@@ -1,0 +1,205 @@
+{
+  "entities": {
+    "Sale": {
+      "title": "Sale",
+      "description": "A record of a sale transaction.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "Date of the sale" },
+        "produto": { "type": "string", "description": "Product name" },
+        "quantidade": { "type": "number", "description": "Quantity sold" },
+        "precoUnitario": { "type": "number", "description": "Unit price" },
+        "total": { "type": "number", "description": "Total sale value" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["data", "produto", "total", "userId"]
+    },
+    "Purchase": {
+      "title": "Purchase",
+      "description": "A record of a purchase transaction.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "Date of the purchase" },
+        "produto": { "type": "string", "description": "Product name" },
+        "quantidade": { "type": "number", "description": "Quantity purchased" },
+        "custoUnitario": { "type": "number", "description": "Unit cost" },
+        "total": { "type": "number", "description": "Total purchase value" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["data", "produto", "total", "userId"]
+    },
+    "BankTransaction": {
+      "title": "BankTransaction",
+      "description": "A bank transaction record.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "Date of the transaction" },
+        "descricao": { "type": "string", "description": "Transaction description" },
+        "categoria": { "type": "string", "enum": ["Venda", "Custo", "Fixa", "Variável", "Outros"] },
+        "valor": { "type": "number", "description": "Transaction amount" },
+        "tipo": { "type": "string", "enum": ["Entrada", "Saída"] },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["data", "descricao", "valor", "tipo", "userId"]
+    },
+    "FinancialRecord": {
+      "title": "FinancialRecord",
+      "description": "A financial record for management.",
+      "type": "object",
+      "properties": {
+        "mes": { "type": "string", "description": "Month/Year of record" },
+        "valor": { "type": "number", "description": "Record amount" },
+        "tipo": { "type": "string", "enum": ["Receita", "Despesa"] },
+        "classificacao": { "type": "string", "description": "Classification" },
+        "detalhes": { "type": "string", "description": "Details" },
+        "observacoes": { "type": "string", "description": "Observations" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["mes", "valor", "tipo", "userId"]
+    },
+    "StockItem": {
+      "title": "StockItem",
+      "description": "A stock level record.",
+      "type": "object",
+      "properties": {
+        "produto": { "type": "string", "description": "Product name" },
+        "estoqueAtual": { "type": "number", "description": "Current stock quantity" },
+        "custoUnitario": { "type": "number", "description": "Unit cost" },
+        "valorTotal": { "type": "number", "description": "Total stock value" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["produto", "estoqueAtual", "userId"]
+    },
+    "WasteRecord": {
+      "title": "WasteRecord",
+      "description": "A record of product waste or reuse.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "Date of occurrence" },
+        "produto": { "type": "string", "description": "Product name" },
+        "quantidade": { "type": "number", "description": "Quantity" },
+        "responsavel": { "type": "string", "description": "Person responsible" },
+        "acao": { "type": "string", "enum": ["Reuso", "Descarte"] },
+        "motivo": { "type": "string", "enum": ["café", "qualidade", "validade", "vitrine"] },
+        "userId": { "type": "string", "description": "Owner of the record" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["data", "produto", "quantidade", "responsavel", "acao", "motivo", "userId"]
+    },
+    "StaffConsumption": {
+      "title": "StaffConsumption",
+      "description": "A record of an employee product consumption.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "Date" },
+        "funcionario": { "type": "string", "description": "Employee name" },
+        "produto": { "type": "string", "description": "Product name" },
+        "valorCheio": { "type": "number", "description": "Full price" },
+        "descontoPercent": { "type": "number", "description": "Discount percentage" },
+        "valorPago": { "type": "number", "description": "Amount to pay" },
+        "status": { "type": "string", "enum": ["pendente", "pago"] },
+        "userId": { "type": "string", "description": "Owner" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["data", "funcionario", "produto", "valorCheio", "descontoPercent", "valorPago", "status", "userId"]
+    },
+    "StaffPayment": {
+      "title": "StaffPayment",
+      "description": "A record of a payment made by a staff member.",
+      "type": "object",
+      "properties": {
+        "dataDeposito": { "type": "string", "description": "Deposit date" },
+        "funcionario": { "type": "string", "description": "Employee name" },
+        "valorPago": { "type": "number", "description": "Amount paid" },
+        "observacao": { "type": "string", "description": "Observations or notes" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["dataDeposito", "funcionario", "valorPago", "userId"]
+    },
+    "PurchaseRequest": {
+      "title": "PurchaseRequest",
+      "description": "Board of purchase requests.",
+      "type": "object",
+      "properties": {
+        "produto": { "type": "string", "description": "Product name" },
+        "quantidade": { "type": "string", "description": "Quantity requested/purchased" },
+        "valorTotal": { "type": "number", "description": "Total value" },
+        "valorUnitario": { "type": "number", "description": "Unit value" },
+        "status": { "type": "string", "enum": ["pendente", "comprado", "recebido", "cancelado"] },
+        "usuarioSolicitante": { "type": "string" },
+        "dataSolicitacao": { "type": "string" },
+        "dataCompra": { "type": "string" },
+        "dataRecebimento": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["produto", "status", "dataSolicitacao", "userId"]
+    },
+    "SystemLog": {
+      "title": "SystemLog",
+      "description": "A system log for operations auditing.",
+      "type": "object",
+      "properties": {
+        "data": { "type": "string", "description": "ISO date YYYY-MM-DD" },
+        "usuario": { "type": "string", "description": "User email who performed action" },
+        "acao": { "type": "string", "enum": ["Criação", "Edição", "Exclusão", "Upload CSV"] },
+        "tipo": { "type": "string", "description": "Log type" },
+        "descricao": { "type": "string", "description": "Description of the action" },
+        "detalhesRef": { "type": "object", "description": "Reference details of affected document" }
+      },
+      "required": ["data", "usuario", "acao", "tipo", "descricao", "detalhesRef"]
+    },
+    "StaffDiscountOverride": {
+      "title": "StaffDiscountOverride",
+      "description": "Customized discount percentage for a staff member product.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "descontoPercent": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["productId", "productName", "descontoPercent"]
+    },
+    "TemperatureMeasurement": {
+      "title": "TemperatureMeasurement",
+      "description": "A temperature reading record for equipment.",
+      "type": "object",
+      "properties": {
+        "data_registro": { "type": "string", "description": "Date YYYY-MM-DD" },
+        "hora_registro": { "type": "string", "description": "Time HH:MM:SS" },
+        "id_equipamento": { "type": "string", "enum": ["Freezer", "Geladeira", "Frigobar"] },
+        "temperatura": { "type": "number" },
+        "funcionario": { "type": "string" },
+        "id_funcionario": { "type": "string" },
+        "status_conformidade": { "type": "string", "enum": ["OK", "ALERTA"] },
+        "justificativa": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["data_registro", "hora_registro", "id_equipamento", "temperatura", "funcionario", "id_funcionario", "status_conformidade", "userId"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/sales": { "schema": "Sale", "description": "Sales history per user" },
+    "users/{userId}/purchases": { "schema": "Purchase", "description": "Purchases history per user" },
+    "users/{userId}/bankTransactions": { "schema": "BankTransaction", "description": "Bank transactions per user" },
+    "users/{userId}/financialRecords": { "schema": "FinancialRecord", "description": "Financial management records per user" },
+    "users/{userId}/stock": { "schema": "StockItem", "description": "Current stock levels per user" },
+    "users/{userId}/wasteRecords": { "schema": "WasteRecord", "description": "Waste and reuse records per user" },
+    "users/{userId}/staffConsumption": { "schema": "StaffConsumption", "description": "Staff consumption records" },
+    "users/{userId}/staffPayments": { "schema": "StaffPayment", "description": "Staff payment records" },
+    "users/shared_franquia_data/sales": { "schema": "Sale", "description": "Shared sales data" },
+    "users/shared_franquia_data/purchases": { "schema": "Purchase", "description": "Shared purchases data" },
+    "users/shared_franquia_data/bankTransactions": { "schema": "BankTransaction", "description": "Shared bank transactions" },
+    "users/shared_franquia_data/financialRecords": { "schema": "FinancialRecord", "description": "Shared financial records" },
+    "users/shared_franquia_data/stock": { "schema": "StockItem", "description": "Shared stock data" },
+    "users/shared_franquia_data/wasteRecords": { "schema": "WasteRecord", "description": "Shared waste records" },
+    "users/shared_franquia_data/staffConsumption": { "schema": "StaffConsumption", "description": "Shared staff consumption" },
+    "users/shared_franquia_data/staffPayments": { "schema": "StaffPayment", "description": "Shared staff payments" },
+    "users/shared_franquia_data/purchaseRequests": { "schema": "PurchaseRequest", "description": "Shared purchase requests" },
+    "users/shared_franquia_data/systemLogs": { "schema": "SystemLog", "description": "Audit trails for shared data" },
+    "users/shared_franquia_data/staffDiscountOverrides": { "schema": "StaffDiscountOverride", "description": "Staff discount override records" },
+    "users/shared_franquia_data/temperatureMeasurements": { "schema": "TemperatureMeasurement", "description": "Shared temperature measurement records" }
+  }
+}

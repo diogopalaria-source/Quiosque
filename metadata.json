@@ -1,0 +1,6 @@
+{
+  "name": "Controle Financeiro Mr. Cheney",
+  "description": "Sistema de fechamento financeiro mensal com análise de extrato, vendas, compras e gestão de estoque via CSV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
