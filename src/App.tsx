@@ -368,6 +368,8 @@ export default function App() {
                                 err.code === 'auth/cancelled-popup-request';
       if (isPopupRestricted) {
         setAuthError('O popup de login foi bloqueado ou fechado antes de ser concluído. Isso é extremamente comum devido às restrições de iFrame no visualizador do AI Studio. Para fazer login normalmente com sua Conta Google, por favor, clique no botão de "ABRIR EM NOVA GUIA" (no canto superior direito da área de visualização) para que a janela de login funcione com sucesso!');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setAuthError('O domínio do GitHub Pages precisa ser adicionado nos "Domínios Autorizados" do Firebase Console. Mas você pode entrar agora mesmo sem isso: basta digitar o PIN "2024" acima e clicar em "Entrar PIN"!');
       } else if (err.code === 'auth/operation-not-allowed') {
         setAuthError('O login com Google não está ativado no Firebase Console. Por favor, ative-o em Authentication > Sign-in method.');
       } else {
@@ -1018,6 +1020,31 @@ export default function App() {
 
     applyStockCorrections();
   }, [dataPath, user]);
+
+  // Expurgo automático dos registros de auditoria de logs (mantendo sempre os últimos 10 dias)
+  // Roda automaticamente em segundo plano na conexão do sistema, idêntico à sincronização de estoque
+  useEffect(() => {
+    if (!user) return;
+
+    const runAutoPurgeLogs = async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastPurgeKey = `last_log_autopurge_${todayStr}`;
+        if (sessionStorage.getItem(lastPurgeKey) === 'true') return;
+
+        const { autoPurgeOldLogs } = await import('./lib/logs');
+        const res = await autoPurgeOldLogs(10);
+        sessionStorage.setItem(lastPurgeKey, 'true');
+        if (res.deleted > 0) {
+          console.log(`[App] Expurgo automático de logs executado: ${res.deleted} logs antigos foram removidos com sucesso mantendo os últimos 10 dias.`);
+        }
+      } catch (err) {
+        console.warn('[App] Alerta não-bloqueante no expurgo automático de logs:', err);
+      }
+    };
+
+    runAutoPurgeLogs();
+  }, [user]);
 
   const generateDeterministicId = (item: any, type: string) => {
     const sanitize = (val: any) => String(val || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '_').substring(0, 50);

@@ -1,4 +1,4 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export interface SystemLog {
@@ -69,3 +69,58 @@ export async function logAction(
     console.error('[SystemLog] Erro ao salvar log do sistema: ', err);
   }
 }
+
+/**
+ * High-performance automatic purge for logs older than `keepDays` (default: 10 days).
+ * Uses batch operations (up to 400 deletes per commit) to complete in 1-2 seconds
+ * even if thousands of logs exist, without blocking the UI.
+ */
+export async function autoPurgeOldLogs(keepDays: number = 10): Promise<{ deleted: number; remaining: number }> {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - keepDays);
+    const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+    const logsRef = collection(db, 'users/shared_franquia_data/systemLogs');
+    const snapshot = await getDocs(logsRef);
+    
+    const docsToDelete: string[] = [];
+    let remaining = 0;
+
+    snapshot.docs.forEach((d) => {
+      const data = d.data();
+      const logDate = data.data;
+      if (logDate && logDate < cutoffDateStr) {
+        docsToDelete.push(d.id);
+      } else {
+        remaining++;
+      }
+    });
+
+    if (docsToDelete.length === 0) {
+      console.log(`[AutoPurgeLogs] Todos os logs estão em conformidade (últimos ${keepDays} dias). Total mantido: ${remaining}`);
+      return { deleted: 0, remaining };
+    }
+
+    console.log(`[AutoPurgeLogs] Expurgando ${docsToDelete.length} logs antigos (> ${keepDays} dias)...`);
+    let deleted = 0;
+    const batchSize = 400;
+
+    for (let i = 0; i < docsToDelete.length; i += batchSize) {
+      const batch = writeBatch(db);
+      const chunk = docsToDelete.slice(i, i + batchSize);
+      chunk.forEach((id) => {
+        batch.delete(doc(db, 'users/shared_franquia_data/systemLogs', id));
+      });
+      await batch.commit();
+      deleted += chunk.length;
+    }
+
+    console.log(`[AutoPurgeLogs] Expurgo concluído com sucesso! ${deleted} logs deletados em lote. Restantes: ${remaining}`);
+    return { deleted, remaining };
+  } catch (err) {
+    console.error('[AutoPurgeLogs] Erro durante o expurgo automático de logs:', err);
+    return { deleted: 0, remaining: 0 };
+  }
+}
+

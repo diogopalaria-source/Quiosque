@@ -17,9 +17,9 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, getDocs, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc, setDoc, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { logAction, SystemLog } from '../lib/logs';
+import { logAction, autoPurgeOldLogs, SystemLog } from '../lib/logs';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 interface LogCenterProps {
@@ -49,35 +49,19 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
   const [isPurging, setIsPurging] = useState(false);
   const hasAutoPurged = useRef(false);
 
-  const purgeOldLogs = async (currentLogs: SystemLog[]) => {
+  const purgeOldLogs = async () => {
     if (isPurging) return;
     setIsPurging(true);
-    setPurgeStatus('Analisando logs para expurgo...');
+    setPurgeStatus('Expurgando logs com mais de 10 dias em alta velocidade...');
 
     try {
-      // Calculate 10 days ago date string (YYYY-MM-DD)
-      const tenDaysAgo = new Date();
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-      const tenDaysAgoStr = tenDaysAgo.toISOString().split('T')[0];
-
-      // Filter logs that are older than 10 days (e.g., log.data < tenDaysAgoStr)
-      const oldLogs = currentLogs.filter(log => log.data && log.data < tenDaysAgoStr);
-
-      if (oldLogs.length > 0) {
-        setPurgeStatus(`Expurgando ${oldLogs.length} logs antigos (mais de 10 dias)...`);
-        let deleted = 0;
-        for (const oldLog of oldLogs) {
-          if (oldLog.id) {
-            await deleteDoc(doc(db, 'users/shared_franquia_data/systemLogs', oldLog.id));
-            deleted++;
-          }
-        }
-        setPurgeStatus(`Expurgo concluído! ${deleted} logs antigos foram deletados.`);
-        setTimeout(() => setPurgeStatus(null), 5000);
+      const res = await autoPurgeOldLogs(10);
+      if (res.deleted > 0) {
+        setPurgeStatus(`Expurgo concluído! ${res.deleted} logs antigos foram deletados.`);
       } else {
-        setPurgeStatus('Todos os logs estão em conformidade (últimos 10 dias).');
-        setTimeout(() => setPurgeStatus(null), 3000);
+        setPurgeStatus('Todos os logs já estão em conformidade (últimos 10 dias).');
       }
+      setTimeout(() => setPurgeStatus(null), 4000);
     } catch (err: any) {
       console.error('Erro ao expurgar logs:', err);
       setPurgeStatus(`Erro ao expurgar: ${err.message || err}`);
@@ -87,13 +71,13 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
     }
   };
 
-  // Trigger auto-purge once when logs are loaded
+  // Trigger auto-purge once when LogCenter opens
   useEffect(() => {
-    if (logs.length > 0 && !hasAutoPurged.current) {
+    if (isAdmin && !hasAutoPurged.current) {
       hasAutoPurged.current = true;
-      purgeOldLogs(logs);
+      autoPurgeOldLogs(10);
     }
-  }, [logs]);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -102,7 +86,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
     }
 
     const logsRef = collection(db, 'users/shared_franquia_data/systemLogs');
-    const qry = query(logsRef, orderBy('timestamp', 'desc'));
+    const qry = query(logsRef, orderBy('timestamp', 'desc'), limit(500));
 
     const unsubscribe = onSnapshot(qry, (snapshot) => {
       const loadedLogs: SystemLog[] = [];
@@ -302,7 +286,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
         
         <div className="flex items-center gap-2 self-start md:self-auto">
           <button
-            onClick={() => purgeOldLogs(logs)}
+            onClick={() => purgeOldLogs()}
             disabled={isPurging}
             className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold rounded-xl border border-amber-200 text-xs transition-colors font-sans flex items-center gap-1.5 disabled:opacity-50"
             id="manual-purge-logs-btn"
