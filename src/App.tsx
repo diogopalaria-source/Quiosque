@@ -624,6 +624,19 @@ export default function App() {
 
     const unsubscribes = collections.map(({ name, setter }) => {
       const path = `${dataPath}/${name}`;
+      const cacheKey = `app_cache_${path}`;
+
+      // Tentar carregar do cache local imediatamente para evitar tela vazia ou dependência excessiva de cota
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setter(parsed);
+          }
+        }
+      } catch {}
+
       const q = query(collection(db, path));
       return onSnapshot(q, (snapshot) => {
         const data = snapshot.docs.map(doc => {
@@ -641,6 +654,11 @@ export default function App() {
           return item;
         });
         setter(data);
+
+        // Salvar no cache local
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch {}
 
         // Check for new urgent purchase requests
         if (name === 'purchaseRequests') {
@@ -674,7 +692,26 @@ export default function App() {
         }
       }, (error) => {
         handleFirestoreError(error, OperationType.LIST, path);
-        setSyncError(`Leitura de '${name}' interrompida: ${error.message || error}`);
+        
+        // Tentar recuperar do cache local em caso de erro ou cota excedida
+        try {
+          const cached = localStorage.getItem(cacheKey);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setter(parsed);
+              console.warn(`Firestore quota/read error on ${name}, loaded successfully from local cache.`);
+              return; // Silencia o erro se houver cache disponível
+            }
+          }
+        } catch {}
+
+        const errStr = error.message || String(error);
+        if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
+          setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
+        } else {
+          setSyncError(`Leitura de '${name}' interrompida: ${errStr}`);
+        }
       });
     });
 

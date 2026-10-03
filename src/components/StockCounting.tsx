@@ -126,18 +126,39 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       try {
         const q = query(collection(db, getDataPath('stockCountConfig')));
         const snap = await getDocs(q);
+        const loaded: PredefinedStockItem[] = [];
         if (!snap.empty) {
-          const loaded: PredefinedStockItem[] = [];
           snap.forEach(d => {
             loaded.push({ id: d.id, ...d.data() } as PredefinedStockItem);
           });
-          if (loaded.length > 0) {
-            loaded.sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR', { sensitivity: 'base' }));
-            setStockItems(loaded);
+        }
+
+        if (loaded.length === 0) {
+          const batch = writeBatch(db);
+          PREDEFINED_STOCK_ITEMS.forEach(item => {
+            const ref = doc(db, getDataPath('stockCountConfig'), item.id);
+            batch.set(ref, item);
+          });
+          await batch.commit();
+          setStockItems(PREDEFINED_STOCK_ITEMS);
+        } else {
+          const existingIds = new Set(loaded.map(i => i.id));
+          const missingDefaults = PREDEFINED_STOCK_ITEMS.filter(p => !existingIds.has(p.id));
+          if (missingDefaults.length > 0) {
+            const batch = writeBatch(db);
+            missingDefaults.forEach(item => {
+              const ref = doc(db, getDataPath('stockCountConfig'), item.id);
+              batch.set(ref, item);
+              loaded.push(item);
+            });
+            await batch.commit();
           }
+          loaded.sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR', { sensitivity: 'base' }));
+          setStockItems(loaded);
         }
       } catch (err) {
         console.error('Error fetching stock config:', err);
+        setStockItems(PREDEFINED_STOCK_ITEMS);
       }
     };
     fetchStockConfig();
@@ -193,17 +214,20 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     }
     try {
       const id = editingCatalogItem ? editingCatalogItem.id : formData.produto.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now();
-      const itemToSave: PredefinedStockItem = {
+      const hasBoxes = formData.tipoContagem === 'caixa_ou_avulso' || formData.tipoContagem === 'embalagem_com_aberto';
+      const itemToSave: any = {
         id,
         produto: formData.produto.trim(),
-        categoria: formData.categoria,
+        categoria: formData.categoria.trim() || 'Geral',
         local: formData.local,
         tipoContagem: formData.tipoContagem,
         minimo: Number(formData.minimo) || 10,
-        unidadeMedida: formData.unidadeMedida.trim() || 'un',
-        tamanhoCaixa: formData.tipoContagem === 'caixa_ou_avulso' || formData.tipoContagem === 'embalagem_com_aberto' ? Number(formData.tamanhoCaixa) || 1 : undefined,
-        rotuloEmbalagem: formData.tipoContagem === 'caixa_ou_avulso' || formData.tipoContagem === 'embalagem_com_aberto' ? (formData.rotuloEmbalagem.trim() || 'caixa') : undefined
+        unidadeMedida: formData.unidadeMedida.trim() || 'un'
       };
+      if (hasBoxes) {
+        itemToSave.tamanhoCaixa = Number(formData.tamanhoCaixa) || 1;
+        itemToSave.rotuloEmbalagem = formData.rotuloEmbalagem.trim() || 'caixa';
+      }
 
       await setDoc(doc(db, getDataPath('stockCountConfig'), id), itemToSave);
       setStockItems(prev => {
@@ -216,6 +240,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       });
       await logAction(editingCatalogItem ? 'Edição' : 'Criação', 'Catálogo Estoque', `${editingCatalogItem ? 'Atualizou' : 'Adicionou'} item "${itemToSave.produto}" no catálogo de contagem`, getDataPath('stockCountConfig'), id, itemToSave);
       
+      alert(editingCatalogItem ? 'Produto atualizado com sucesso!' : 'Produto adicionado com sucesso!');
       setEditingCatalogItem(null);
       setIsAddingItem(false);
       setFormData({
@@ -230,7 +255,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       });
     } catch (err) {
       console.error('Erro ao salvar item do catálogo:', err);
-      alert('Erro ao salvar item no Firestore.');
+      alert('Erro ao salvar item no Firestore. Verifique sua conexão.');
     }
   };
 
