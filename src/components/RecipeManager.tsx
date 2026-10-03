@@ -17,7 +17,7 @@ import { collection, addDoc, getDocs, query, where, deleteDoc, doc, updateDoc, o
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
 import { Recipe, RecipeIngredient, MACRO_INGREDIENTS } from '../types';
-import { cn } from '../lib/utils';
+import { cn, getDataPath } from '../lib/utils';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 
 interface RecipeManagerProps {
@@ -42,7 +42,7 @@ export const RecipeManager: React.FC<RecipeManagerProps> = ({ userId, onBack }) 
   const [activeIngredientIdx, setActiveIngredientIdx] = useState<number | null>(null);
   const ingredientListRef = React.useRef<HTMLDivElement>(null);
 
-  const dataPath = 'users/shared_franquia_data/recipes';
+  const dataPath = getDataPath('recipes');
 
   useEffect(() => {
     // 1. Live listener for Recipes
@@ -78,7 +78,7 @@ export const RecipeManager: React.FC<RecipeManagerProps> = ({ userId, onBack }) 
 
   const fetchAvailableProducts = async () => {
     try {
-      const salesRef = collection(db, 'users/shared_franquia_data/sales');
+      const salesRef = collection(db, getDataPath('sales'));
       const snapshot = await getDocs(salesRef);
       const uniqueNames = new Set<string>();
       

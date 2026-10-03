@@ -21,6 +21,7 @@ import { collection, getDocs, onSnapshot, query, orderBy, doc, updateDoc, delete
 import { db } from '../lib/firebase';
 import { logAction, autoPurgeOldLogs, SystemLog } from '../lib/logs';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { getDataPath, getBasePath } from '../lib/utils';
 
 interface LogCenterProps {
   isAdmin: boolean;
@@ -85,7 +86,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
       return;
     }
 
-    const logsRef = collection(db, 'users/shared_franquia_data/systemLogs');
+    const logsRef = collection(db, getDataPath('systemLogs'));
     const qry = query(logsRef, orderBy('timestamp', 'desc'), limit(500));
 
     const unsubscribe = onSnapshot(qry, (snapshot) => {
@@ -101,7 +102,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
       setError(null);
     }, (err) => {
       console.error('Erro ao escutar logs:', err);
-      handleFirestoreError(err, OperationType.GET, 'users/shared_franquia_data/systemLogs');
+      handleFirestoreError(err, OperationType.GET, getDataPath('systemLogs'));
       setError('Erro ao ler logs do Firebase. Verifique suas permissões.');
       setLoading(false);
     });
@@ -180,7 +181,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
     setIsSaving(true);
     setSaveStatus(null);
 
-    const fullPath = `users/shared_franquia_data/${editingLog.detalhesRef.collection}`;
+    const fullPath = `${getBasePath()}/${editingLog.detalhesRef.collection}`;
     const docRef = doc(db, fullPath, editingLog.detalhesRef.docId);
 
     try {
@@ -208,7 +209,7 @@ export const LogCenter: React.FC<LogCenterProps> = ({ isAdmin, onBack }) => {
       // 3. If the log itself stores the payload, also update this log item's detailsRef.payload in Firestore
       // so that it matches the current database records state
       try {
-        const logDocRef = doc(db, 'users/shared_franquia_data/systemLogs', editingLog.id!);
+        const logDocRef = doc(db, getDataPath('systemLogs'), editingLog.id!);
         await updateDoc(logDocRef, {
           'detalhesRef.payload': editPayload
         });

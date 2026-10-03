@@ -149,8 +149,14 @@ service cloud.firestore {
              data.userId is string;
     }
 
+    // Rules for stock minimum overrides
+    match /stockMinimumOverrides/{overrideId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     // Rules for shared access
-    match /users/shared_franquia_data {
+    match /users/{userId} {
       allow read: if true; // Permite leitura pública do caminho compartilhado via PIN/Link
       
       match /sales/{saleId} {
@@ -239,11 +245,26 @@ service cloud.firestore {
         allow delete: if isAuthorized();
       }
 
+      match /systemStaff/{id} {
+        allow read: if true;
+        allow write: if true;
+      }
+
       match /temperatureMeasurements/{id} {
         allow read: if true;
         allow create: if isValidTemperatureMeasurement(request.resource.data);
         allow update: if isAuthorized();
         allow delete: if isAuthorized();
+      }
+
+      match /stockCountConfig/{id} {
+        allow read: if true;
+        allow write: if true;
+      }
+
+      match /stockMinimumOverrides/{id} {
+        allow read: if true;
+        allow write: if true;
       }
     }
   }

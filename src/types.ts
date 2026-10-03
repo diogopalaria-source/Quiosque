@@ -40,10 +40,20 @@ export interface BankTransaction {
 }
 
 export interface StockItem {
+  id?: string;
   produto: string;
   estoqueAtual: number;
   custoUnitario: number;
   valorTotal: number;
+  estoqueMinimo?: number;
+  estoqueQuiosque?: number;
+  estoqueDeposito?: number;
+  dataContagemQuiosque?: string;
+  dataContagemDeposito?: string;
+  responsavelContagem?: string;
+  categoria?: string;
+  unidade?: string;
+  userId?: string;
 }
 
 export interface FinancialRecord {
@@ -126,6 +136,12 @@ export interface PurchaseRequest {
   naoConsiderarEstoque?: boolean;
   previsaoChegada?: string;
   createdAt?: any;
+  tipoItem?: 'compra' | 'producao';
+  ehProducao?: boolean;
+  quantidadeProduzida?: number;
+  responsavelProducao?: string;
+  destinoProducao?: 'quiosque' | 'deposito';
+  observacao?: string;
 }
 
 export interface RecipeIngredient {

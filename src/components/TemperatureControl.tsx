@@ -26,12 +26,13 @@ import {
   ReferenceLine 
 } from 'recharts';
 import { db, auth } from '../lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { TemperatureMeasurement } from '../types';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { logAction } from '../lib/logs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { getDataPath } from '../lib/utils';
 
 interface TemperatureControlProps {
   userId: string;
@@ -39,7 +40,7 @@ interface TemperatureControlProps {
   onBack: () => void;
 }
 
-const RESPONSABLES = ['Ariane', 'Barbara', 'Breno', 'Diogo', 'Free Lancer', 'Nathan', 'Alicia'];
+// const RESPONSABLES removed
 
 export const TemperatureControl: React.FC<TemperatureControlProps> = ({
   userId,
@@ -70,30 +71,58 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
   });
   const [chartEquipment, setChartEquipment] = useState<'Freezer' | 'Geladeira' | 'Frigobar'>('Geladeira');
 
+  const [responsablesList, setResponsablesList] = useState<string[]>(['Ariane', 'Barbara', 'Breno', 'Diogo', 'Free Lancer', 'Nathan', 'Alicia']);
+
+  // Fetch staff from systemStaff and merge with measurements history
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const colRef = collection(db, getDataPath('systemStaff'));
+        const snap = await getDocs(colRef);
+        const defaultList = ['Ariane', 'Barbara', 'Breno', 'Diogo', 'Free Lancer', 'Nathan', 'Alicia'];
+        const names = new Set<string>();
+        if (!snap.empty) {
+          snap.forEach(d => {
+            const data = d.data();
+            const mods = data.allowedModules;
+            if (!mods || mods.includes('temperature')) {
+              if (data.nome) names.add(data.nome);
+            }
+          });
+        } else {
+          defaultList.forEach(name => names.add(name));
+        }
+        setResponsablesList(Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+      } catch (err) {
+        console.error('Error fetching staff for temperature:', err);
+      }
+    };
+    fetchStaff();
+  }, [measurements]);
+
   // Auto-detect and prefill staff member
   useEffect(() => {
     if (auth.currentUser) {
       const emailName = auth.currentUser.email ? auth.currentUser.email.split('@')[0] : '';
-      // Try to match with Responsables
-      const matched = RESPONSABLES.find(r => r.toLowerCase() === emailName.toLowerCase());
+      const matched = responsablesList.find(r => r.toLowerCase() === emailName.toLowerCase());
       if (matched) {
         setFuncionario(matched);
       } else if (auth.currentUser.displayName) {
         setFuncionario(auth.currentUser.displayName);
       } else if (emailName) {
         setFuncionario(emailName);
-      } else {
-        setFuncionario('Ariane'); // safe fallback
+      } else if (responsablesList.length > 0) {
+        setFuncionario(responsablesList[0]);
       }
-    } else {
-      setFuncionario('Ariane');
+    } else if (responsablesList.length > 0 && !funcionario) {
+      setFuncionario(responsablesList[0]);
     }
-  }, []);
+  }, [responsablesList]);
 
   // Fetch all measurements
   useEffect(() => {
     setLoading(true);
-    const path = 'users/shared_franquia_data/temperatureMeasurements';
+    const path = getDataPath('temperatureMeasurements');
     const q = query(
       collection(db, path),
       orderBy('data_registro', 'desc')
@@ -135,7 +164,7 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
       if (wrongRecords209.length > 0) {
         wrongRecords209.forEach(async (record) => {
           try {
-            const docRef = doc(db, 'users/shared_franquia_data/temperatureMeasurements', record.id!);
+            const docRef = doc(db, getDataPath('temperatureMeasurements'), record.id!);
             await updateDoc(docRef, {
               temperatura: -20.9,
               status_conformidade: 'OK',
@@ -163,7 +192,7 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
       if (wrongRecords162.length > 0) {
         wrongRecords162.forEach(async (record) => {
           try {
-            const docRef = doc(db, 'users/shared_franquia_data/temperatureMeasurements', record.id!);
+            const docRef = doc(db, getDataPath('temperatureMeasurements'), record.id!);
             await updateDoc(docRef, {
               temperatura: -16.2,
               status_conformidade: 'ALERTA' // -16.2 is warmer than -18, so it is still ALERTA
@@ -190,7 +219,7 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
       if (wrongRecords188.length > 0) {
         wrongRecords188.forEach(async (record) => {
           try {
-            const docRef = doc(db, 'users/shared_franquia_data/temperatureMeasurements', record.id!);
+            const docRef = doc(db, getDataPath('temperatureMeasurements'), record.id!);
             await updateDoc(docRef, {
               temperatura: -18.8,
               status_conformidade: 'OK',
@@ -325,7 +354,7 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
         createdAt: new Date().toISOString()
       };
 
-      const path = 'users/shared_franquia_data/temperatureMeasurements';
+      const path = getDataPath('temperatureMeasurements');
       const docRef = await addDoc(collection(db, path), record);
 
       // Log the creation in system logs
@@ -601,7 +630,7 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50"
                     >
                       <option value="">-- Selecione seu nome --</option>
-                      {RESPONSABLES.map(r => (
+                      {responsablesList.map(r => (
                         <option key={r} value={r}>{r}</option>
                       ))}
                     </select>

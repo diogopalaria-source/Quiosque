@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Plus, 
+  Minus,
   Trash2, 
   ArrowRight, 
   CheckCircle2, 
@@ -16,23 +17,26 @@ import {
   AlertTriangle,
   Bell,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ChefHat
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
-import { PurchaseRequest, MACRO_INGREDIENTS } from '../types';
-import { cn, formatCurrency, getMacroForProduct } from '../lib/utils';
+import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
+import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
 import { format } from 'date-fns';
 import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
 import { Search } from 'lucide-react';
+import { isCakeProduction, CAKE_PRODUCTION_NAMES } from '../data/kioskStockList';
 
 interface PurchaseRequestsProps {
   userId: string;
   requests: PurchaseRequest[];
   userRole: string;
   purchasesData?: any[];
+  stockData?: StockItem[];
 }
 
 export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({ 
@@ -115,6 +119,21 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
     naoConsiderarEstoque: false
   });
 
+  // Modal para atendente concluir produção de bolo e enviar direto para o estoque
+  const [cakeProductionModal, setCakeProductionModal] = useState<{
+    show: boolean;
+    request: PurchaseRequest | null;
+    quantidadeProduzida: string;
+    destino: 'quiosque' | 'deposito';
+    responsavel: string;
+  }>({
+    show: false,
+    request: null,
+    quantidadeProduzida: '10',
+    destino: 'deposito',
+    responsavel: ''
+  });
+
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -125,18 +144,23 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
     setLoading(true);
     setError(null);
     try {
+      const isCake = isCakeProduction(newRequest.trim());
       const record: Omit<PurchaseRequest, 'id'> = {
         produto: newRequest.trim(),
         status: 'pendente',
-        usuarioSolicitante: 'Operação',
+        usuarioSolicitante: isCake ? 'Operação (Produção Interna)' : 'Operação',
         dataSolicitacao: format(new Date(), 'yyyy-MM-dd'),
         urgente: isUrgent,
+        tipoItem: isCake ? 'producao' : 'compra',
+        ehProducao: isCake,
+        quantidade: isCake ? '10 un' : undefined,
+        quantidadeNumerica: isCake ? 10 : undefined,
         userId: userId,
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, 'users/shared_franquia_data/purchaseRequests'), record);
-      await logAction('Criação', 'Pedido Compra', `Solicitou compra de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''}`, 'purchaseRequests', docRef.id, record);
+      const docRef = await addDoc(collection(db, getDataPath('purchaseRequests')), record);
+      await logAction('Criação', 'Pedido Compra', `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''}`, 'purchaseRequests', docRef.id, record);
 
       // Notification logic
       if (isUrgent) {
@@ -158,7 +182,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'users/shared_franquia_data/purchaseRequests');
+      handleFirestoreError(err, OperationType.WRITE, getDataPath('purchaseRequests'));
       setError('Erro ao salvar solicitação. Verifique sua conexão.');
     } finally {
       setLoading(false);
@@ -168,7 +192,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   const handleDelete = async (id: string) => {
     try {
       const existingReq = requests?.find(r => r.id === id);
-      await deleteDoc(doc(db, 'users/shared_franquia_data/purchaseRequests', id));
+      await deleteDoc(doc(db, getDataPath('purchaseRequests'), id));
       await logAction('Exclusão', 'Pedido Compra', `Excluiu pedido de compra para "${existingReq?.produto || id}"`, 'purchaseRequests', id, existingReq || {});
     } catch (err) {
       console.error(err);
@@ -248,7 +272,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       const vUnit = confirmModal.useTotal ? Number(confirmModal.valorTotal) / q : Number(confirmModal.valorUnitario);
 
       // We store the quantitative part for calculations and string for display
-      const requestRef = doc(db, 'users/shared_franquia_data/purchaseRequests', confirmModal.request.id!);
+      const requestRef = doc(db, getDataPath('purchaseRequests'), confirmModal.request.id!);
       const payloadUpdate = {
         status: 'comprado',
         produto: confirmModal.produtoNome,
@@ -267,7 +291,107 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
       setConfirmModal({ ...confirmModal, show: false, request: null });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'users/shared_franquia_data/purchaseRequests');
+      handleFirestoreError(err, OperationType.UPDATE, getDataPath('purchaseRequests'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Enviar bolo produzido da coluna da esquerda direto para o estoque
+  const handleCompleteCakeProduction = async () => {
+    if (!cakeProductionModal.request || !cakeProductionModal.quantidadeProduzida) return;
+    const qtd = parseInt(cakeProductionModal.quantidadeProduzida, 10);
+    if (isNaN(qtd) || qtd <= 0) {
+      setError('Por favor, informe uma quantidade válida maior que zero.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const req = cakeProductionModal.request;
+      const destino = cakeProductionModal.destino;
+      const responsavel = cakeProductionModal.responsavel.trim() || 'Atendente';
+      const nowIso = new Date().toISOString();
+
+      // 1. Atualizar ou criar o estoque do bolo
+      const stockColRef = collection(db, getDataPath('stock'));
+      const qry = query(stockColRef, where('produto', '==', req.produto));
+      const snap = await getDocs(qry);
+
+      if (!snap.empty) {
+        const stockDoc = snap.docs[0];
+        const currentData = stockDoc.data();
+        const currentTotal = Number(currentData.estoqueAtual) || 0;
+        const currentQuiosque = Number(currentData.estoqueQuiosque) || 0;
+        const currentDeposito = Number(currentData.estoqueDeposito) || 0;
+
+        const newTotal = currentTotal + qtd;
+        const newQuiosque = destino === 'quiosque' ? currentQuiosque + qtd : currentQuiosque;
+        const newDeposito = destino === 'deposito' ? currentDeposito + qtd : currentDeposito;
+
+        await updateDoc(stockDoc.ref, {
+          estoqueAtual: newTotal,
+          estoqueQuiosque: newQuiosque,
+          estoqueDeposito: newDeposito,
+          responsavelContagem: responsavel,
+          ...(destino === 'quiosque' ? { dataContagemQuiosque: nowIso } : { dataContagemDeposito: nowIso }),
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(stockColRef, {
+          produto: req.produto,
+          estoqueAtual: qtd,
+          estoqueQuiosque: destino === 'quiosque' ? qtd : 0,
+          estoqueDeposito: destino === 'deposito' ? qtd : 0,
+          estoqueMinimo: 10,
+          unidade: 'un',
+          categoria: 'Gelados & Doces',
+          custoUnitario: req.valorUnitario || 0,
+          valorTotal: qtd * (req.valorUnitario || 0),
+          responsavelContagem: responsavel,
+          userId: getBasePath(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      // 2. Atualizar o pedido para 'recebido'
+      if (req.id) {
+        await updateDoc(doc(db, getDataPath('purchaseRequests'), req.id), {
+          status: 'recebido',
+          dataRecebimento: format(new Date(), 'yyyy-MM-dd'),
+          quantidadeRecebida: qtd,
+          quantidadeProduzida: qtd,
+          responsavelProducao: responsavel,
+          destinoProducao: destino,
+          observacao: `Bolo produzido internamente (${qtd} un enviadas para o ${destino === 'quiosque' ? 'Quiosque' : 'Estoque'}) por ${responsavel}`
+        });
+      }
+
+      // 3. Registrar Log de Auditoria
+      await logAction(
+        'Criação',
+        'Produção de Bolo',
+        `Produção concluída: ${qtd} un de "${req.produto}" enviadas direto para o ${destino === 'quiosque' ? 'Quiosque' : 'Estoque'} por ${responsavel}.`,
+        'stock',
+        req.id || 'cake_production',
+        {
+          produto: req.produto,
+          quantidadeProduzida: qtd,
+          destino: destino,
+          responsavel: responsavel
+        },
+        responsavel
+      );
+
+      setCakeProductionModal({ show: false, request: null, quantidadeProduzida: '10', destino: 'quiosque', responsavel: '' });
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Erro ao registrar produção de bolo:', err);
+      handleFirestoreError(err, OperationType.WRITE, getDataPath('cakeProduction'));
+      setError('Erro ao enviar bolo para o estoque. Verifique sua conexão.');
     } finally {
       setLoading(false);
     }
@@ -281,7 +405,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       const [year, month, day] = purchaseDate.split('-');
       const mesRef = `${month}/${year}`;
       
-      const pathRequests = 'users/shared_franquia_data/purchaseRequests';
+      const pathRequests = getDataPath('purchaseRequests');
       const updatedReqPayload = {
         status: 'recebido',
         dataRecebimento: format(new Date(), 'yyyy-MM-dd')
@@ -307,7 +431,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
           quantidade: qtyToAdd,
           custoUnitario: req.valorUnitario || 0,
           total: req.valorTotal || 0,
-          userId: userId,
+          userId: userId || getBasePath(),
           createdAt: serverTimestamp(),
           fornecedor: req.fornecedor || 'Sem Fornecedor'
         };
@@ -316,13 +440,13 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
           purchaseRecord.desconsiderado = true;
         }
 
-        const pathPurchases = 'users/shared_franquia_data/purchases';
+        const pathPurchases = getDataPath('purchases');
         const purchaseDocRef = await addDoc(collection(db, pathPurchases), purchaseRecord);
         await logAction('Criação', 'Lançamento Manual', `Compra registrada por recebimento de "${stockProductName}"`, 'purchases', purchaseDocRef.id, purchaseRecord);
 
         // ONLY update stock if not desconsiderado
         if (!isDesconsiderado) {
-          const stockRef = collection(db, 'users/shared_franquia_data/stock');
+          const stockRef = collection(db, getDataPath('stock'));
           const qry = query(stockRef, where('produto', '==', stockProductName));
           const querySnapshot = await getDocs(qry);
 
@@ -344,7 +468,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
               estoqueAtual: qtyToAdd,
               custoUnitario: req.valorUnitario || 0,
               valorTotal: qtyToAdd * (req.valorUnitario || 0),
-              userId: userId
+              userId: userId || getBasePath()
             };
             const stockDocRef = await addDoc(stockRef, newStockDoc);
             await logAction('Criação', 'Ajuste Estoque', `Criou item de estoque "${stockProductName}" via recebimento`, 'stock', stockDocRef.id, newStockDoc);
@@ -352,7 +476,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         }
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'users/shared_franquia_data/confirmReceiptFlow');
+      handleFirestoreError(err, OperationType.WRITE, getDataPath('confirmReceiptFlow'));
     } finally {
       setLoading(false);
     }
@@ -510,61 +634,147 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
               )}
             </AnimatePresence>
 
-            {column1.map(req => (
-              <motion.div 
-                layout
-                key={req.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={cn(
-                  "bg-white p-5 rounded-2xl shadow-md border-2 flex items-center justify-between group relative overflow-hidden transition-all duration-300",
-                  req.urgente ? "border-rose-500 bg-rose-100 shadow-rose-200" : "border-slate-100"
-                )}
-              >
-                {req.urgente && (
-                  <div className="absolute left-0 top-0 bottom-0 w-2 bg-rose-600"></div>
-                )}
-                <div>
-                  <h4 className={cn(
-                    "font-black uppercase text-sm mb-1 flex items-center gap-2",
-                    req.urgente ? "text-rose-900" : "text-slate-900"
-                  )}>
-                    {req.produto}
-                    {req.urgente && (
-                      <span className="px-2 py-0.5 bg-rose-600 text-white text-[9px] rounded-full animate-bounce shadow-md">URGENTE</span>
-                    )}
-                  </h4>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 uppercase">
-                      <Calendar className="w-3 h-3" />
-                      {format(new Date(req.dataSolicitacao + 'T00:00:00'), 'dd/MM')}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 uppercase">
-                      <User className="w-3 h-3" />
-                      {req.usuarioSolicitante || 'Operação'}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={() => handleDelete(req.id!)}
-                    className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                    title="Excluir solicitação"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                  {isAdmin && (
-                    <button 
-                      onClick={() => openConfirmModal(req)}
-                      className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
-                      title="Marcar como comprado"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
+            {column1.map(req => {
+              const isCake = isCakeProduction(req.produto) || req.ehProducao || req.tipoItem === 'producao';
+
+              return (
+                <motion.div 
+                  layout
+                  key={req.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className={cn(
+                    "p-5 rounded-2xl shadow-md border-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group relative overflow-hidden transition-all duration-300",
+                    isCake 
+                      ? "border-amber-300 bg-amber-50/40 shadow-amber-100" 
+                      : req.urgente 
+                        ? "border-rose-500 bg-rose-100 shadow-rose-200" 
+                        : "bg-white border-slate-100"
                   )}
-                </div>
-              </motion.div>
-            ))}
+                >
+                  {req.urgente && (
+                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-rose-600"></div>
+                  )}
+                  {isCake && !req.urgente && (
+                    <div className="absolute left-0 top-0 bottom-0 w-2 bg-amber-500"></div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className={cn(
+                        "font-black uppercase text-sm flex items-center gap-2",
+                        req.urgente ? "text-rose-900" : isCake ? "text-amber-950" : "text-slate-900"
+                      )}>
+                        {req.produto}
+                      </h4>
+
+                      {isCake && (
+                        <span className="px-2 py-0.5 bg-amber-500 text-white text-[9px] font-black uppercase rounded-full flex items-center gap-1 shadow-xs">
+                          <ChefHat className="w-3 h-3" /> Produção Interna
+                        </span>
+                      )}
+
+                      {req.urgente && (
+                        <span className="px-2 py-0.5 bg-rose-600 text-white text-[9px] font-black uppercase rounded-full animate-bounce shadow-md">
+                          URGENTE
+                        </span>
+                      )}
+
+                      {req.quantidade && (
+                        <span className="px-2 py-0.5 bg-white/80 border border-slate-200 text-slate-700 text-[10px] font-black uppercase rounded-md">
+                          Pedir: {req.quantidade}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        {format(new Date(req.dataSolicitacao + 'T00:00:00'), 'dd/MM')}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3 text-slate-400" />
+                        {req.usuarioSolicitante || 'Operação'}
+                      </span>
+                    </div>
+
+                    {req.observacao && (
+                      <p className="text-[11px] text-slate-500 mt-1 font-medium italic">
+                        {req.observacao}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* AÇÕES DA COLUNA 1 */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {/* Botão de Envio Direto para Estoque para Bolos de Produção */}
+                    {isCake ? (
+                      <button
+                        onClick={() => {
+                          const initialQtd = req.quantidadeNumerica?.toString() || req.quantidade?.split(' ')[0] || '10';
+                          setCakeProductionModal({
+                            show: true,
+                            request: req,
+                            quantidadeProduzida: initialQtd,
+                            destino: 'deposito',
+                            responsavel: ''
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95"
+                        title="Registrar que o bolo foi produzido e enviar direto para o estoque"
+                      >
+                        <ChefHat className="w-4 h-4" />
+                        <span>Produzido &rarr; Estoque</span>
+                      </button>
+                    ) : null}
+
+                    {/* Botão de Compra para Admin */}
+                    {isAdmin && !isCake && (
+                      <button 
+                        onClick={() => openConfirmModal(req)}
+                        className="p-2.5 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all"
+                        title="Marcar como comprado"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {/* Botão Urgente ao lado do lixinho */}
+                    <button
+                      onClick={async () => {
+                        try {
+                          const newUrgentVal = !req.urgente;
+                          await updateDoc(doc(db, getDataPath('purchaseRequests'), req.id!), {
+                            urgente: newUrgentVal
+                          });
+                          await logAction('Edição', 'Pedido Compra', `Marcou pedido de "${req.produto}" como ${newUrgentVal ? 'URGENTE' : 'não urgente'}`, 'purchaseRequests', req.id!, { ...req, urgente: newUrgentVal });
+                        } catch (err) {
+                          console.error('Erro ao atualizar urgência:', err);
+                        }
+                      }}
+                      className={cn(
+                        "p-2.5 rounded-xl transition-all border",
+                        req.urgente 
+                          ? "bg-rose-500 text-white border-rose-600 shadow-xs" 
+                          : "bg-white text-slate-400 border-slate-200 hover:text-rose-500 hover:border-rose-300"
+                      )}
+                      title={req.urgente ? "Remover marcação de urgente" : "Marcar como URGENTE"}
+                    >
+                      <AlertTriangle className="w-4 h-4" />
+                    </button>
+
+                    {/* Excluir solicitação */}
+                    <button 
+                      onClick={() => handleDelete(req.id!)}
+                      className="p-2.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                      title="Excluir solicitação"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </motion.div>
+              );
+            })}
 
             {column1.length === 0 && !showAddForm && (
               <div className="h-40 flex flex-col items-center justify-center text-slate-300 font-bold uppercase text-[10px] tracking-widest border-2 border-dashed border-slate-200 rounded-2xl">
@@ -1028,6 +1238,125 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                 >
                   {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : "Confirmar e Mover"}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal para Atendente Concluir Produção de Bolo e Enviar Direto para o Estoque */}
+      <AnimatePresence>
+        {cakeProductionModal.show && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 sm:p-7 relative border border-amber-200"
+            >
+              <button 
+                onClick={() => setCakeProductionModal({ ...cakeProductionModal, show: false })}
+                className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-800 transition-colors rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3.5 mb-6">
+                <div className="p-3.5 bg-amber-500 text-white rounded-2xl shadow-md shadow-amber-200">
+                  <ChefHat className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                    Concluir Produção de Bolo
+                  </h3>
+                  <p className="text-xs text-amber-700 font-bold uppercase tracking-wider">
+                    {cakeProductionModal.request?.produto}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {/* Quantidade Produzida */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+                    Quantidade Produzida (unidades)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = parseInt(cakeProductionModal.quantidadeProduzida, 10) || 0;
+                        setCakeProductionModal({
+                          ...cakeProductionModal,
+                          quantidadeProduzida: Math.max(1, current - 1).toString()
+                        });
+                      }}
+                      className="w-12 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center text-lg font-bold"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      required
+                      value={cakeProductionModal.quantidadeProduzida}
+                      onChange={e => setCakeProductionModal({ ...cakeProductionModal, quantidadeProduzida: e.target.value })}
+                      className="flex-1 h-12 text-center text-xl font-black text-slate-900 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = parseInt(cakeProductionModal.quantidadeProduzida, 10) || 0;
+                        setCakeProductionModal({
+                          ...cakeProductionModal,
+                          quantidadeProduzida: (current + 1).toString()
+                        });
+                      }}
+                      className="w-12 h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white flex items-center justify-center text-lg font-bold"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Nome de quem produziu */}
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+                    Atendente / Responsável pela Produção
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Carlos, Ana..."
+                    value={cakeProductionModal.responsavel}
+                    onChange={e => setCakeProductionModal({ ...cakeProductionModal, responsavel: e.target.value })}
+                    className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCakeProductionModal({ ...cakeProductionModal, show: false })}
+                    className="flex-1 py-3.5 text-xs font-bold uppercase tracking-wider text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading || !cakeProductionModal.quantidadeProduzida}
+                    onClick={handleCompleteCakeProduction}
+                    className="flex-[2] py-3.5 bg-amber-500 hover:bg-amber-600 active:scale-98 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-amber-200 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Enviar para Estoque</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

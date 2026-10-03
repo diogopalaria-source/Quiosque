@@ -31,9 +31,10 @@ import {
   Check,
   CheckCircle,
   QrCode,
-  Share2
+  Share2,
+  PackageCheck
 } from 'lucide-react';
-import { cn, getMacroForProduct, formatCurrency } from './lib/utils';
+import { cn, getMacroForProduct, formatCurrency, getDataPath, getBasePath } from './lib/utils';
 import { Sale, Purchase, BankTransaction, StockItem, MonthlyClosing, FinancialRecord, StaffConsumption, StaffPayment, PurchaseRequest, Recipe, StaffDiscountOverride } from './types';
 import { PurchaseReviewModal } from './components/PurchaseReviewModal';
 import { Dashboard } from './components/Dashboard';
@@ -43,7 +44,8 @@ import { CashFlow } from './components/CashFlow';
 import { OperationHub } from './components/OperationHub';
 import { InventoryDashboard } from './components/InventoryDashboard';
 import { LogCenter } from './components/LogCenter';
-import { ShareKioskModal } from './components/ShareKioskModal';
+import { StockCountQrModal } from './components/StockCountQrModal';
+import { StockCounting } from './components/StockCounting';
 import { motion, AnimatePresence } from 'motion/react';
 import { MultiSelect } from './components/MultiSelect';
 import JSZip from 'jszip';
@@ -68,7 +70,7 @@ import {
 import { signInAnonymously } from 'firebase/auth';
 import { OperationType, handleFirestoreError } from './lib/firestoreUtils';
 
-type Tab = 'dashboard' | 'upload' | 'cashflow' | 'indicators' | 'waste' | 'inventory' | 'logs';
+type Tab = 'dashboard' | 'upload' | 'cashflow' | 'indicators' | 'waste' | 'inventory' | 'logs' | 'stock_count';
 
 const MONTH_MAP: Record<string, string> = {
   'jan': '01', 'fev': '02', 'mar': '03', 'abr': '04', 'mai': '05', 'jun': '06',
@@ -214,6 +216,7 @@ export default function App() {
   const [pin, setPin] = useState('');
   const [showPinInput, setShowPinInput] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isStockCountMode, setIsStockCountMode] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
   // Data State
@@ -269,7 +272,12 @@ export default function App() {
       // Support only hash for maximum server compatibility (avoids 404s)
       const isWasteAccess = hash.includes('waste');
       const isGiseleAccess = hash.includes('gisele') || hash.includes('gestao');
+      const isContagemAccess = hash.includes('contagem') || window.location.search.includes('contagem');
       
+      if (isContagemAccess) {
+        setIsStockCountMode(true);
+      }
+
       if (isWasteAccess) {
         setIsPublicWasteMode(true);
         sessionStorage.setItem('public_waste', 'true');
@@ -420,7 +428,7 @@ export default function App() {
           let itemData = item.data || [];
           
           // Se a lista de dados atual estiver descarregada ou vazia, tenta ler ao vivo do Firestore
-          const activePath = dataPath || 'users/shared_franquia_data';
+          const activePath = dataPath || getDataPath();
           if (itemData.length === 0) {
             try {
               const q = query(collection(db, `${activePath}/${item.colName}`));
@@ -584,7 +592,7 @@ export default function App() {
 
   // Shared Data Path Logic
   // Atendentes também salvam no caminho compartilhado para que o dono veja
-  const dataPath = (isAuthorized || isAttendant) ? 'users/shared_franquia_data' : null;
+  const dataPath = (isAuthorized || isAttendant) ? getBasePath() : null;
 
   // Firestore Sync
   useEffect(() => {
@@ -738,11 +746,11 @@ export default function App() {
 
         // 4. temperatureMeasurements
         try {
-          const snap = await getDocs(collection(db, 'users/shared_franquia_data/temperatureMeasurements'));
+          const snap = await getDocs(collection(db, getDataPath('temperatureMeasurements')));
           for (const d of snap.docs) {
             const data = d.data();
             if (data.funcionario === 'Natan') {
-              await updateFireDoc(fireDoc(db, 'users/shared_franquia_data/temperatureMeasurements', d.id), { funcionario: 'Nathan' });
+              await updateFireDoc(fireDoc(db, getDataPath('temperatureMeasurements'), d.id), { funcionario: 'Nathan' });
             }
           }
         } catch (e) {
@@ -1990,11 +1998,11 @@ export default function App() {
              <div className="flex items-center gap-2">
                <button 
                  onClick={() => setShowShareModal(true)} 
-                 className="px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200/60 rounded-xl transition-colors flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-sm"
-                 title="Compartilhar / Conectar Celular ou Tablet do Quiosque"
+                 className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/70 rounded-xl transition-colors flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-sm"
+                 title="QR Code para Contagem de Estoque Offline (Celular)"
                >
-                 <QrCode className="w-4 h-4" />
-                 <span className="hidden sm:inline">QR CODE / LINK</span>
+                 <QrCode className="w-4 h-4 text-emerald-600" />
+                 <span className="hidden sm:inline">QR CODE CONTAGEM</span>
                </button>
                <button 
                  onClick={() => { setShowPinInput(true); setAuthError(null); }} 
@@ -2017,21 +2025,36 @@ export default function App() {
              </div>
           </div>
           <div className="max-w-4xl mx-auto">
-            <OperationHub 
-              userId="shared_franquia_data" 
-              onBack={handleSystemLogout} 
-              wasteRecords={wasteData}
-              staffConsumptions={staffConsumptionData}
-              staffPayments={staffPaymentsData}
-              purchaseRequests={purchaseRequestsData}
-              userRole={userRole}
-              salesData={salesData}
-              staffDiscountOverrides={staffDiscountOverrides}
-              stockData={stockData}
-              recipes={recipesData}
-              purchases={purchasesData}
-              selectedMonths={selectedMonths}
-            />
+            {isStockCountMode ? (
+              <StockCounting
+                stockData={stockData}
+                userId={getBasePath()}
+                userRole={userRole}
+                isQrSession={true}
+                onBack={() => {
+                  setIsStockCountMode(false);
+                  if (window.location.hash.includes('contagem')) {
+                    window.location.hash = '';
+                  }
+                }}
+              />
+            ) : (
+              <OperationHub 
+                userId={getBasePath()} 
+                onBack={handleSystemLogout} 
+                wasteRecords={wasteData}
+                staffConsumptions={staffConsumptionData}
+                staffPayments={staffPaymentsData}
+                purchaseRequests={purchaseRequestsData}
+                userRole={userRole}
+                salesData={salesData}
+                staffDiscountOverrides={staffDiscountOverrides}
+                stockData={stockData}
+                recipes={recipesData}
+                purchases={purchasesData}
+                selectedMonths={selectedMonths}
+              />
+            )}
           </div>
         </div>
 
@@ -2142,9 +2165,13 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <ShareKioskModal 
+        <StockCountQrModal 
           isOpen={showShareModal} 
-          onClose={() => setShowShareModal(false)} 
+          onClose={() => setShowShareModal(false)}
+          onOpenDirectly={() => {
+            setShowShareModal(false);
+            setIsStockCountMode(true);
+          }}
         />
       </div>
     );
@@ -2242,6 +2269,22 @@ export default function App() {
             {activeTab === 'inventory' && <ChevronRight className="w-4 h-4 ml-auto" />}
           </button>
 
+          {userRole === 'admin' && (
+            <button
+              onClick={() => { setActiveTab('stock_count'); setIsSidebarOpen(false); }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group",
+                activeTab === 'stock_count' 
+                  ? "bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-100 font-bold" 
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+              )}
+            >
+              <PackageCheck className={cn("w-5 h-5", activeTab === 'stock_count' ? "text-emerald-600" : "text-slate-400 group-hover:text-slate-900")} />
+              Contagem de Estoque
+              {activeTab === 'stock_count' && <ChevronRight className="w-4 h-4 ml-auto" />}
+            </button>
+          )}
+
           <button
             onClick={() => { setActiveTab('cashflow'); setIsSidebarOpen(false); }}
             className={cn(
@@ -2307,10 +2350,10 @@ export default function App() {
 
             <button
               onClick={() => { setShowShareModal(true); setIsSidebarOpen(false); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all group bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/70 shadow-xs"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all group bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/70 shadow-xs"
             >
-              <QrCode className="w-4 h-4 text-amber-600" />
-              Link Quiosque (QR Code)
+              <QrCode className="w-4 h-4 text-emerald-600" />
+              QR Code Contagem Estoque
             </button>
 
             <div className="flex items-center gap-3 px-4 py-3 text-xs text-blue-600 font-black uppercase tracking-widest bg-slate-50/50 rounded-xl">
@@ -2510,7 +2553,7 @@ export default function App() {
               <CashFlow 
                 bank={filteredBankCashFlow} 
                 financial={financialData}
-                dataPath={dataPath || "users/shared_franquia_data"}
+                dataPath={dataPath || getBasePath()}
               />
             </motion.div>
           ) : activeTab === 'waste' ? (
@@ -2522,7 +2565,7 @@ export default function App() {
               transition={{ duration: 0.3 }}
             >
               <OperationHub 
-                userId="shared_franquia_data" 
+                userId={getBasePath()} 
                 onBack={() => setActiveTab('dashboard')} 
                 wasteRecords={wasteData}
                 staffConsumptions={staffConsumptionData}
@@ -2537,6 +2580,22 @@ export default function App() {
                 selectedMonths={selectedMonths}
               />
             </motion.div>
+          ) : activeTab === 'stock_count' ? (
+            <motion.div
+              key="stock_count"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <StockCounting 
+                stockData={stockData} 
+                userId={getBasePath()} 
+                userRole={userRole} 
+                onBack={() => setActiveTab('inventory')} 
+                onNavigateToPurchases={() => setActiveTab('waste')} 
+              />
+            </motion.div>
           ) : (activeTab === 'upload' && userRole === 'admin') ? (
             <motion.div
               key="upload"
@@ -2548,7 +2607,10 @@ export default function App() {
             >
               <CSVUpload 
                 title="Vendas Realizadas" 
-                onDataLoaded={(data) => {
+                onDataLoaded={async (data, mode) => {
+                  if (mode === 'replace') {
+                    await clearCollection('sales', 'Vendas Realizadas');
+                  }
                   const occurrences: Record<string, number> = {};
                   const mapped = data.map((row: any) => {
                     const rawMonth = getCSVVal(row, ['Mês', 'mes', 'Mes', 'Periodo', 'Mês/Ano']);
@@ -2594,7 +2656,10 @@ export default function App() {
               />
               <CSVUpload 
                 title="Gestão de Fluxo" 
-                onDataLoaded={(data) => {
+                onDataLoaded={async (data, mode) => {
+                  if (mode === 'replace') {
+                    await clearCollection('financialRecords', 'Gestão de Fluxo');
+                  }
                   const mapped = data.map((row: any) => {
                     const tipoRaw = getCSVVal(row, ['Tipo', 'tipo']).toLowerCase();
                     const tipo = (tipoRaw.includes('receita') || tipoRaw.startsWith('e')) ? 'Receita' : 'Despesa';
@@ -2676,7 +2741,10 @@ export default function App() {
               <CSVUpload 
                 title="Extrato Bancário" 
                 accept=".txt,.csv,.txt;text/plain;text/csv"
-                onDataLoaded={(data) => {
+                onDataLoaded={async (data, mode) => {
+                  if (mode === 'replace') {
+                    await clearCollection('bankTransactions', 'Extrato Bancário');
+                  }
                   const occurrences: Record<string, number> = {};
                   const mapped = data.map((row: any) => {
                     let line = row.raw;
@@ -2724,7 +2792,10 @@ export default function App() {
               />
               <CSVUpload 
                 title="Controle de Estoque" 
-                onDataLoaded={(data) => {
+                onDataLoaded={async (data, mode) => {
+                  if (mode === 'replace') {
+                    await clearCollection('stock', 'Controle de Estoque');
+                  }
                   const mapped = data.map((row: any) => ({
                     produto: getCSVVal(row, ['Produto', 'produto', 'Nome']),
                     estoqueAtual: parseCSVAmount(getCSVVal(row, ['Estoque', 'Estoque Atual', 'Qtd'])),
@@ -3039,9 +3110,13 @@ export default function App() {
         }}
       />
 
-      <ShareKioskModal 
+      <StockCountQrModal 
         isOpen={showShareModal} 
-        onClose={() => setShowShareModal(false)} 
+        onClose={() => setShowShareModal(false)}
+        onOpenDirectly={() => {
+          setShowShareModal(false);
+          setActiveTab('stock_count');
+        }}
       />
     </div>
   );

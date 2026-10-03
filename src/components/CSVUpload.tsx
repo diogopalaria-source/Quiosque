@@ -1,13 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import Papa from 'papaparse';
-import { Upload, FileText, CheckCircle2, Trash2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, Trash2, Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
 
 interface CSVUploadProps {
   title: string;
   description?: string;
-  onDataLoaded: (data: any[]) => void;
+  onDataLoaded: (data: any[], mode: 'append' | 'replace') => void;
   onReset?: () => void;
   onRemoveDuplicates?: () => void;
   isLoading?: boolean;
@@ -26,8 +26,13 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
   accept = ".csv"
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadMode, setUploadMode] = useState<'append' | 'replace'>('append');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const [showResetConfirm, setShowResetConfirm] = React.useState(false);
+  const triggerUpload = (mode: 'append' | 'replace') => {
+    setUploadMode(mode);
+    fileInputRef.current?.click();
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -46,8 +51,8 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
             .map(line => ({ raw: line }));
           
           if (lines.length > 0) {
-            onDataLoaded(lines);
-            alert(`Sucesso! ${lines.length} linhas lidas do arquivo "${file.name}".`);
+            onDataLoaded(lines, uploadMode);
+            alert(`Sucesso! ${lines.length} linhas lidas (${uploadMode === 'append' ? 'incrementadas' : 'substituídas'}) do arquivo "${file.name}".`);
           } else {
             alert('Aviso: O arquivo selecionado parece estar vazio.');
           }
@@ -66,8 +71,8 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
         dynamicTyping: true,
         complete: (results) => {
           if (results.data && results.data.length > 0) {
-            onDataLoaded(results.data);
-            alert(`Sucesso! ${results.data.length} registros importados do arquivo "${file.name}".`);
+            onDataLoaded(results.data, uploadMode);
+            alert(`Sucesso! ${results.data.length} registros ${uploadMode === 'append' ? 'incrementados' : 'substituídos'} do arquivo "${file.name}".`);
           } else {
             alert('Aviso: Nenhum dado válido encontrado no arquivo CSV.');
           }
@@ -111,20 +116,37 @@ export const CSVUpload: React.FC<CSVUploadProps> = ({
           <p className="text-sm text-slate-500 mt-1">{description}</p>
           
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                hasData 
-                  ? "bg-emerald-600 text-white hover:bg-emerald-700" 
-                  : "bg-slate-900 text-white hover:bg-slate-800",
-                isLoading && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <Upload className="w-4 h-4" />
-              {hasData ? 'Substituir' : 'Importar'}
-            </button>
+            {!hasData ? (
+              <button
+                onClick={() => triggerUpload('append')}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors shadow-sm"
+              >
+                <Upload className="w-4 h-4" />
+                Importar Dados
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => triggerUpload('append')}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-colors shadow-sm"
+                  title="Adicionar novos dados aos registros existentes sem apagar o que já tem"
+                >
+                  <Plus className="w-4 h-4" />
+                  Adicionar / Incrementar
+                </button>
+                <button
+                  onClick={() => triggerUpload('replace')}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-black uppercase tracking-wider transition-colors shadow-sm"
+                  title="Apagar dados anteriores e substituir pelos novos"
+                >
+                  <Upload className="w-4 h-4" />
+                  Substituir Tudo
+                </button>
+              </>
+            )}
 
             {hasData && onRemoveDuplicates && (
               <button

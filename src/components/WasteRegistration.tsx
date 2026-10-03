@@ -26,11 +26,11 @@ import {
   Scale
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
 import { WasteRecord, StaffConsumption, StaffPayment, Sale, StockItem, Recipe, Purchase, MACRO_INGREDIENTS, StaffDiscountOverride } from '../types';
-import { cn, formatCurrency, getMacroForProduct } from '../lib/utils';
+import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
 import { SearchableSelect } from './SearchableSelect';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
@@ -74,10 +74,7 @@ const formatWasteDate = (d: string, formatStr: string = 'dd/MM/yyyy'): string =>
   }
 };
 
-const ALL_RESPONSABLES = ['Ariane', 'Barbara', 'Alexandre', 'Breno', 'Keila', 'Diogo', 'Free Lancer', 'Kenji', 'Nathan', 'Alicia'];
-const CONSUMPTION_RESPONSABLES = ['Ariane', 'Barbara', 'Breno', 'Diogo', 'Free Lancer', 'Nathan', 'Alicia'];
-const PAYMENT_RESPONSABLES = ['Ariane', 'Barbara', 'Alexandre', 'Breno', 'Keila', 'Diogo', 'Free Lancer', 'Kenji', 'Nathan', 'Alicia'];
-const RESPONSABLES = ALL_RESPONSABLES;
+// static staff arrays removed
 export const normalizeStaffName = (name?: string): string => {
   if (!name) return '';
   const trimmed = name.trim();
@@ -354,6 +351,82 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
   selectedMonths = []
 }) => {
   const [activeMode, setActiveMode] = React.useState<Mode>(initialMode);
+  const [systemStaffList, setSystemStaffList] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const colRef = collection(db, getDataPath('systemStaff'));
+        const snap = await getDocs(colRef);
+        const loaded: any[] = [];
+        if (!snap.empty) {
+          snap.forEach(d => loaded.push({ id: d.id, ...d.data() }));
+        }
+        setSystemStaffList(loaded);
+      } catch (err) {
+        console.error('Error fetching systemStaff in WasteRegistration:', err);
+      }
+    };
+    fetchStaff();
+  }, [userId]);
+
+  const { allResponsables, consumptionResponsables, paymentResponsables, wasteResponsables } = React.useMemo(() => {
+    const defaultList = ['Ariane', 'Barbara', 'Alexandre', 'Breno', 'Keila', 'Diogo', 'Free Lancer', 'Kenji', 'Nathan', 'Alicia'];
+    const consumptionNames = new Set<string>();
+    const paymentNames = new Set<string>();
+    const wasteNames = new Set<string>();
+    const allNames = new Set<string>(defaultList);
+
+    if (systemStaffList.length > 0) {
+      systemStaffList.forEach(s => {
+        if (s.nome) {
+          const mods = s.allowedModules || ['consumption', 'payments', 'waste', 'temperature'];
+          allNames.add(s.nome);
+          if (mods.includes('consumption')) consumptionNames.add(s.nome);
+          if (mods.includes('payments')) paymentNames.add(s.nome);
+          if (mods.includes('waste')) wasteNames.add(s.nome);
+        }
+      });
+    } else {
+      defaultList.forEach(name => {
+        consumptionNames.add(name);
+        paymentNames.add(name);
+        wasteNames.add(name);
+      });
+    }
+
+    // Historical names for reports/statements preservation
+    (staffConsumptions || []).forEach(c => {
+      if (c.funcionario) {
+        const norm = normalizeStaffName(c.funcionario);
+        if (norm) allNames.add(norm);
+      }
+    });
+    (staffPayments || []).forEach(p => {
+      if (p.funcionario) {
+        const norm = normalizeStaffName(p.funcionario);
+        if (norm) allNames.add(norm);
+      }
+    });
+    (wasteRecords || []).forEach(w => {
+      if (w.responsavel) {
+        const norm = normalizeStaffName(w.responsavel);
+        if (norm) allNames.add(norm);
+      }
+    });
+
+    return {
+      allResponsables: Array.from(allNames).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      consumptionResponsables: Array.from(consumptionNames).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      paymentResponsables: Array.from(paymentNames).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+      wasteResponsables: Array.from(wasteNames).sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    };
+  }, [systemStaffList, staffConsumptions, staffPayments, wasteRecords]);
+
+  const ALL_RESPONSABLES = allResponsables;
+  const CONSUMPTION_RESPONSABLES = consumptionResponsables;
+  const PAYMENT_RESPONSABLES = paymentResponsables;
+  const RESPONSABLES = allResponsables;
   const [statementFilter, setStatementFilter] = React.useState<'all' | 'consumption' | 'payment'>('all');
   const [paymentsFilter, setPaymentsFilter] = React.useState<'all' | 'debit' | 'credit'>('all');
 
@@ -366,7 +439,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
   }, [staffDiscountOverrides]);
 
   const applyDeductionToStock = async (items: Array<{ produto: string; quantidade: number }>) => {
-    const stockPath = `users/shared_franquia_data/stock`;
+    const stockPath = getDataPath('stock');
     const batch = writeBatch(db);
     let techUpdates = 0;
 
@@ -583,7 +656,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
           valorPago: Number(editForm.valorPago),
         };
         
-        const docRef = doc(db, `users/shared_franquia_data/staffConsumption`, editingTx.id);
+        const docRef = doc(db, getDataPath('staffConsumption'), editingTx.id);
         await updateDoc(docRef, updatedRecord);
         
         await logAction(
@@ -602,7 +675,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
           observacao: editForm.observacao,
         };
         
-        const docRef = doc(db, `users/shared_franquia_data/staffPayments`, editingTx.id);
+        const docRef = doc(db, getDataPath('staffPayments'), editingTx.id);
         await updateDoc(docRef, updatedRecord);
         
         await logAction(
@@ -633,7 +706,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
     try {
       const isDebit = deletingTx.type === 'debit';
       const collectionPath = isDebit ? 'staffConsumption' : 'staffPayments';
-      const docRef = doc(db, `users/shared_franquia_data/${collectionPath}`, deletingTx.id);
+      const docRef = doc(db, getDataPath(collectionPath), deletingTx.id);
       
       await deleteDoc(docRef);
       
@@ -661,7 +734,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
 
   const adjustStockForWasteRecord = async (produto: string, deltaQty: number) => {
     if (deltaQty === 0) return;
-    const stockPath = `users/shared_franquia_data/stock`;
+    const stockPath = getDataPath('stock');
     const batch = writeBatch(db);
     let techUpdates = 0;
     const stockCopy = stockData.map(s => ({ ...s }));
@@ -755,7 +828,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         }
       }
 
-      const docRef = doc(db, `users/shared_franquia_data/wasteRecords`, originalRecord.id);
+      const docRef = doc(db, getDataPath('wasteRecords'), originalRecord.id);
       await updateDoc(docRef, updatedRecord);
 
       await logAction(
@@ -793,7 +866,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         }
       }
 
-      const docRef = doc(db, `users/shared_franquia_data/wasteRecords`, originalRecord.id);
+      const docRef = doc(db, getDataPath('wasteRecords'), originalRecord.id);
       await deleteDoc(docRef);
 
       await logAction(
@@ -984,11 +1057,11 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         mes: formatWasteDate(wasteForm.data, 'MM/yyyy'),
         produto: finalProductName,
         quantidade: Math.floor(Number(wasteForm.quantidade)),
-        userId: userId,
+        userId: userId || getBasePath(),
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, `users/shared_franquia_data/wasteRecords`), record);
+      const docRef = await addDoc(collection(db, getDataPath('wasteRecords')), record);
       await logAction('Criação', 'Descarte', `Registrou descarte de ${record.quantidade} un de ${record.produto}`, 'wasteRecords', docRef.id, record);
       
       // Auto-deduct stock for waste with 'Descarte' action
@@ -1073,10 +1146,10 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
           descontoPercent: getProductDiscount(product.id, product.descontoPercent),
           valorPago: individualValorPago,
           status: 'pendente',
-          userId: userId,
+          userId: userId || getBasePath(),
           createdAt: serverTimestamp()
         };
-        return addDoc(collection(db, `users/shared_franquia_data/staffConsumption`), record).then(async (docRef) => {
+        return addDoc(collection(db, getDataPath('staffConsumption')), record).then(async (docRef) => {
           await logAction('Criação', 'Consumo Equipe', `Registrou consumo para ${record.funcionario}: ${record.quantidade} un de ${record.produto}`, 'staffConsumption', docRef.id, record);
           return docRef;
         });
@@ -1127,11 +1200,11 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         funcionario: paymentForm.funcionario,
         valorPago: Number(paymentForm.valorPago),
         observacao: paymentForm.observacao,
-        userId: userId,
+        userId: userId || getBasePath(),
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, `users/shared_franquia_data/staffPayments`), record);
+      const docRef = await addDoc(collection(db, getDataPath('staffPayments')), record);
       await logAction('Criação', 'Pagamento Equipe', `Registrou pagamento para ${record.funcionario} de R$ ${record.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'staffPayments', docRef.id, record);
       
       setSuccess(true);

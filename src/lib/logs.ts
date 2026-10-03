@@ -1,4 +1,5 @@
-import { collection, addDoc, serverTimestamp, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { getDataPath } from './utils';
+import { collection, addDoc, setDoc, serverTimestamp, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
 export interface SystemLog {
@@ -63,7 +64,8 @@ export async function logAction(
       }
     };
     
-    await addDoc(collection(db, 'users/shared_franquia_data/systemLogs'), logRecord);
+    const newLogRef = doc(collection(db, getDataPath('systemLogs')));
+    await setDoc(newLogRef, logRecord);
     console.log(`[SystemLog] Logged action: ${acao} for ${tipo} success.`);
   } catch (err) {
     console.error('[SystemLog] Erro ao salvar log do sistema: ', err);
@@ -81,7 +83,7 @@ export async function autoPurgeOldLogs(keepDays: number = 10): Promise<{ deleted
     cutoffDate.setDate(cutoffDate.getDate() - keepDays);
     const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
 
-    const logsRef = collection(db, 'users/shared_franquia_data/systemLogs');
+    const logsRef = collection(db, getDataPath('systemLogs'));
     const snapshot = await getDocs(logsRef);
     
     const docsToDelete: string[] = [];
@@ -110,7 +112,7 @@ export async function autoPurgeOldLogs(keepDays: number = 10): Promise<{ deleted
       const batch = writeBatch(db);
       const chunk = docsToDelete.slice(i, i + batchSize);
       chunk.forEach((id) => {
-        batch.delete(doc(db, 'users/shared_franquia_data/systemLogs', id));
+        batch.delete(doc(db, getDataPath('systemLogs'), id));
       });
       await batch.commit();
       deleted += chunk.length;
