@@ -622,100 +622,56 @@ export default function App() {
       { name: 'staffDiscountOverrides', setter: setStaffDiscountOverrides },
     ];
 
-    const unsubscribes = collections.map(({ name, setter }) => {
-      const path = `${dataPath}/${name}`;
-      const cacheKey = `app_cache_${path}`;
+    const loadAllCollections = async () => {
+      for (const { name, setter } of collections) {
+        const path = `${dataPath}/${name}`;
+        const cacheKey = `app_cache_${path}`;
 
-      // Tentar carregar do cache local imediatamente para evitar tela vazia ou dependência excessiva de cota
-      try {
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setter(parsed);
-          }
-        }
-      } catch {}
-
-      const q = query(collection(db, path));
-      return onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const item = { ...doc.data(), id: doc.id } as any;
-          if (name === 'staffConsumption' || name === 'staffPayments') {
-            if (item.funcionario === 'Natan') {
-              item.funcionario = 'Nathan';
-            }
-          }
-          if (name === 'wasteRecords') {
-            if (item.responsavel === 'Natan') {
-              item.responsavel = 'Nathan';
-            }
-          }
-          return item;
-        });
-        setter(data);
-
-        // Salvar no cache local
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch {}
-
-        // Check for new urgent purchase requests
-        if (name === 'purchaseRequests') {
-          snapshot.docChanges().forEach((change) => {
-            if (change.type === 'added') {
-              const req = change.doc.data() as PurchaseRequest;
-              // Check if it's urgent AND newly created (not just loaded on startup)
-              // We skip the initial load by checking metadata
-              if (req.urgente && !snapshot.metadata.fromCache && snapshot.metadata.hasPendingWrites === false) {
-                // To be even safer against startup noise, check if createdAt is recent
-                const createdAt = req.createdAt?.toDate?.() || new Date();
-                const now = new Date();
-                const diffInSeconds = Math.floor((now.getTime() - createdAt.getTime()) / 1000);
-                
-                if (diffInSeconds < 30) { // Only notify if created in the last 30 seconds
-                  try {
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                      new Notification('PEDIDO URGENTE!', {
-                        body: `Novo produto urgente solicitado: ${req.produto}`,
-                        icon: '/favicon.ico',
-                        tag: `urgent-${change.doc.id}`
-                      });
-                    }
-                  } catch (e) {
-                    console.warn("Notifications blocked or not supported in this iframe:", e);
-                  }
-                }
-              }
-            }
-          });
-        }
-      }, (error) => {
-        handleFirestoreError(error, OperationType.LIST, path);
-        
-        // Tentar recuperar do cache local em caso de erro ou cota excedida
+        // 1. Carregar do cache local para renderização instantânea sem gastar cota
         try {
           const cached = localStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setter(parsed);
-              console.warn(`Firestore quota/read error on ${name}, loaded successfully from local cache.`);
-              return; // Silencia o erro se houver cache disponível
             }
           }
         } catch {}
 
-        const errStr = error.message || String(error);
-        if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
-          setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
-        } else {
-          setSyncError(`Leitura de '${name}' interrompida: ${errStr}`);
+        // 2. Buscar dados atualizados uma única vez via getDocs (otimizado para o plano gratuito)
+        try {
+          const q = query(collection(db, path));
+          const snap = await getDocs(q);
+          const data = snap.docs.map(doc => {
+            const item = { ...doc.data(), id: doc.id } as any;
+            if (name === 'staffConsumption' || name === 'staffPayments') {
+              if (item.funcionario === 'Natan') {
+                item.funcionario = 'Nathan';
+              }
+            }
+            if (name === 'wasteRecords') {
+              if (item.responsavel === 'Natan') {
+                item.responsavel = 'Nathan';
+              }
+            }
+            return item;
+          });
+          setter(data);
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+          } catch {}
+        } catch (error: any) {
+          console.warn(`Error fetching ${name}:`, error);
+          handleFirestoreError(error, OperationType.LIST, path);
+          const errStr = error?.message || String(error);
+          if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
+            setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
+          }
         }
-      });
-    });
+      }
+    };
 
-    return () => unsubscribes.forEach(unsub => unsub());
+    loadAllCollections();
   }, [dataPath]);
 
   // Data patching for specific known errors (Alexandre 2029) and Natan -> Nathan migration
