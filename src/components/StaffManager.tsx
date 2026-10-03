@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, ArrowLeft, Check, Pencil, X, Save } from 'lucide-react';
+import { Users, Plus, Trash2, ArrowLeft, Check, Pencil, X, Save, AlertCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { getDataPath, cn } from '../lib/utils';
+import { getDataPath, cn, formatCurrency } from '../lib/utils';
 import { logAction } from '../lib/logs';
 
 interface StaffManagerProps {
@@ -15,7 +15,7 @@ export interface StaffMember {
   nome: string;
   funcao?: string;
   ativo: boolean;
-  allowedModules?: string[]; // ['consumption', 'payments', 'waste', 'temperature']
+  allowedModules?: string[]; // ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
 }
 
 const DEFAULT_STAFF = [
@@ -26,11 +26,13 @@ const ALL_MODULES = [
   { id: 'consumption', label: 'Consumo Funcionário' },
   { id: 'payments', label: 'Baixa de Pagamentos' },
   { id: 'waste', label: 'Desperdício e Reuso' },
-  { id: 'temperature', label: 'Controle de Temperatura' }
+  { id: 'temperature', label: 'Controle de Temperatura' },
+  { id: 'stockCounting', label: 'Contagem de Estoque' }
 ];
 
 export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) => {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
+  const [staffConsumptionsMap, setStaffConsumptionsMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -39,11 +41,12 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
   const [formFunction, setFormFunction] = useState('Colaborador');
-  const [formModules, setFormModules] = useState<string[]>(['consumption', 'payments', 'waste', 'temperature']);
+  const [formModules, setFormModules] = useState<string[]>(['consumption', 'payments', 'waste', 'temperature', 'stockCounting']);
 
   useEffect(() => {
-    const fetchStaff = async () => {
+    const fetchData = async () => {
       try {
+        // Fetch staff
         const colRef = collection(db, getDataPath('systemStaff'));
         const snap = await getDocs(colRef);
         if (!snap.empty) {
@@ -55,7 +58,7 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
               nome: data.nome || '',
               funcao: data.funcao || 'Colaborador',
               ativo: data.ativo ?? true,
-              allowedModules: data.allowedModules || ['consumption', 'payments', 'waste', 'temperature']
+              allowedModules: data.allowedModules || ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
             } as StaffMember);
           });
           loaded.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -67,19 +70,40 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
             nome: name,
             funcao: 'Colaborador',
             ativo: true,
-            allowedModules: ['consumption', 'payments', 'waste', 'temperature']
+            allowedModules: ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
           }));
           for (const s of initial) {
             await setDoc(doc(db, getDataPath('systemStaff'), s.id), { ...s, updatedAt: serverTimestamp() });
           }
           setStaffList(initial);
         }
+
+        // Fetch staff consumptions to calculate totals per employee
+        const consSnap = await getDocs(collection(db, getDataPath('staffConsumption')));
+        const totals: Record<string, number> = {};
+        if (!consSnap.empty) {
+          consSnap.forEach(d => {
+            const data = d.data();
+            const nome = (data.funcionario || '').trim();
+            const val = Number(data.valorPago ?? data.valorCheio ?? 0) || 0;
+            if (nome) {
+              const norm = nome.toLowerCase();
+              totals[norm] = (totals[norm] || 0) + val;
+            }
+          });
+        }
+        setStaffConsumptionsMap(totals);
       } catch (err) {
-        console.error('Error fetching staff:', err);
+        console.error('Error fetching staff or consumptions:', err);
       }
     };
-    fetchStaff();
+    fetchData();
   }, [userId]);
+
+  const getEmployeeConsumptionTotal = (name: string) => {
+    if (!name) return 0;
+    return staffConsumptionsMap[name.toLowerCase().trim()] || 0;
+  };
 
   const handleSaveStaff = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +171,11 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
 
 
   const toggleModule = (modId: string) => {
+    const currentTotal = editingId ? getEmployeeConsumptionTotal(formName) : 0;
+    if (currentTotal > 0 && modId === 'payments') {
+      alert('Este funcionário possui consumo pendente. O módulo de Baixa de Pagamentos não pode ser desmarcado até a quitação.');
+      return;
+    }
     setFormModules(prev => 
       prev.includes(modId) ? prev.filter(m => m !== modId) : [...prev, modId]
     );
@@ -216,18 +245,53 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
             </button>
           </div>
 
+          {editingId && (() => {
+            const currentTotal = getEmployeeConsumptionTotal(formName);
+            if (currentTotal > 0) {
+              return (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-bold flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p>⚠️ Atenção: Este colaborador possui consumo registrado no valor de <strong className="text-amber-950 underline">{formatCurrency(currentTotal)}</strong>.</p>
+                    <p className="text-[10px] text-amber-800 font-normal mt-0.5">Certifique-se de não apagar o nome ou alterar indevidamente caso haja pagamentos pendentes a receber.</p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-xs flex items-center gap-2">
+                <span>Consumo acumulado: <strong className="text-slate-900">{formatCurrency(currentTotal)}</strong></span>
+              </div>
+            );
+          })()}
+
           <form onSubmit={handleSaveStaff} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nome do Funcionário</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Carlos Silva"
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900"
-                />
+                {(() => {
+                  const hasPending = editingId ? getEmployeeConsumptionTotal(formName) > 0 : false;
+                  return (
+                    <>
+                      <input
+                        type="text"
+                        required
+                        disabled={hasPending}
+                        placeholder="Ex: Carlos Silva"
+                        value={formName}
+                        onChange={e => setFormName(e.target.value)}
+                        className={cn(
+                          "w-full border rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900",
+                          hasPending ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300" : "bg-slate-50 border-slate-200"
+                        )}
+                        title={hasPending ? "Nome bloqueado por possuir consumo pendente" : undefined}
+                      />
+                      {hasPending && (
+                        <span className="text-[10px] text-amber-700 font-bold mt-1 block">🔒 Nome travado (possui consumo pendente)</span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Função / Cargo</label>
@@ -247,23 +311,28 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {ALL_MODULES.map(mod => {
-                  const checked = formModules.includes(mod.id);
+                  const isPaymentsLocked = editingId && getEmployeeConsumptionTotal(formName) > 0 && mod.id === 'payments';
+                  const checked = isPaymentsLocked ? true : formModules.includes(mod.id);
                   return (
                     <label
                       key={mod.id}
-                      onClick={() => toggleModule(mod.id)}
+                      onClick={() => !isPaymentsLocked && toggleModule(mod.id)}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-2xl border cursor-pointer transition-all",
-                        checked ? "bg-emerald-50/80 border-emerald-300 text-emerald-900 font-bold" : "bg-slate-50 border-slate-200 text-slate-600"
+                        "flex items-center gap-3 p-3 rounded-2xl border transition-all",
+                        isPaymentsLocked ? "bg-amber-50/60 border-amber-300 text-amber-900 cursor-not-allowed opacity-90 font-bold" :
+                        checked ? "bg-emerald-50/80 border-emerald-300 text-emerald-900 font-bold cursor-pointer" : "bg-slate-50 border-slate-200 text-slate-600 cursor-pointer"
                       )}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={isPaymentsLocked}
                         onChange={() => {}} // Handled by container onClick
-                        className="w-4 h-4 text-emerald-600 rounded-md focus:ring-emerald-500"
+                        className="w-4 h-4 text-emerald-600 rounded-md focus:ring-emerald-500 disabled:opacity-50"
                       />
-                      <span className="text-xs">{mod.label}</span>
+                      <span className="text-xs">
+                        {mod.label} {isPaymentsLocked && '(Obrigatório por débito)'}
+                      </span>
                     </label>
                   );
                 })}

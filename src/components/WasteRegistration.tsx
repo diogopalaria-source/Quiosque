@@ -426,7 +426,8 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
   const ALL_RESPONSABLES = allResponsables;
   const CONSUMPTION_RESPONSABLES = consumptionResponsables;
   const PAYMENT_RESPONSABLES = paymentResponsables;
-  const RESPONSABLES = allResponsables;
+  const WASTE_RESPONSABLES = wasteResponsables;
+  const RESPONSABLES = wasteResponsables;
   const [statementFilter, setStatementFilter] = React.useState<'all' | 'consumption' | 'payment'>('all');
   const [paymentsFilter, setPaymentsFilter] = React.useState<'all' | 'debit' | 'credit'>('all');
 
@@ -2271,7 +2272,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
                           required
                         >
                           <option value="">Funcionário</option>
-                          {CONSUMPTION_RESPONSABLES.map(r => (
+                          {WASTE_RESPONSABLES.map(r => (
                             <option key={r} value={r}>{r}</option>
                           ))}
                         </select>
@@ -3857,7 +3858,7 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
                     required
                   >
                     <option value="">Selecione o funcionário</option>
-                    {Array.from(new Set([...CONSUMPTION_RESPONSABLES, editWasteForm.responsavel])).filter(Boolean).map(r => (
+                    {Array.from(new Set([...WASTE_RESPONSABLES, editWasteForm.responsavel])).filter(Boolean).map(r => (
                       <option key={r} value={r}>{r}</option>
                     ))}
                   </select>

@@ -21,6 +21,7 @@ import { PurchaseRequests } from './PurchaseRequests';
 import { RecipeManager } from './RecipeManager';
 import { StaffDiscountManager } from './StaffDiscountManager';
 
+import { StaffManager } from './StaffManager';
 import { TemperatureControl } from './TemperatureControl';
 import { StockCountQrModal } from './StockCountQrModal';
 import { StockCounting } from './StockCounting';
@@ -43,7 +44,7 @@ interface OperationHubProps {
   selectedMonths?: string[];
 }
 
-type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'system_hub';
+type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub';
 
 export const OperationHub: React.FC<OperationHubProps> = ({
   userId,
@@ -114,6 +115,14 @@ export const OperationHub: React.FC<OperationHubProps> = ({
       icon: PackageCheck,
       color: 'bg-emerald-50 text-emerald-700 border-emerald-100',
       iconBg: 'bg-emerald-100'
+    },
+    {
+      id: 'staff_management',
+      title: 'Gestão de Funcionários',
+      description: 'Cadastro e gerenciamento de colaboradores para os comboboxes do sistema.',
+      icon: Users,
+      color: 'bg-teal-50 text-teal-700 border-teal-100',
+      iconBg: 'bg-teal-100'
     },
 
     {
@@ -363,7 +372,12 @@ export const OperationHub: React.FC<OperationHubProps> = ({
             />
           )}
 
-
+          {currentView === 'staff_management' && userRole === 'admin' && (
+            <StaffManager 
+              userId={userId} 
+              onBack={() => setCurrentView('system_hub')} 
+            />
+          )}
 
           {currentView === 'temperature' && (
             <TemperatureControl 

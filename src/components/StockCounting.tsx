@@ -119,6 +119,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     rotuloEmbalagem: 'caixa'
   });
 
+  const [stockStaffList, setStockStaffList] = useState<string[]>(['Ariane', 'Barbara', 'Breno', 'Diogo', 'Free Lancer', 'Nathan', 'Alicia']);
+
   useEffect(() => {
     const fetchStockConfig = async () => {
       try {
@@ -139,6 +141,28 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       }
     };
     fetchStockConfig();
+
+    const fetchStockStaff = async () => {
+      try {
+        const snap = await getDocs(collection(db, getDataPath('systemStaff')));
+        if (!snap.empty) {
+          const names: string[] = [];
+          snap.forEach(d => {
+            const data = d.data();
+            const allowed = data.allowedModules;
+            if (!allowed || allowed.includes('stockCounting')) {
+              if (data.nome) names.push(data.nome);
+            }
+          });
+          if (names.length > 0) {
+            setStockStaffList(names.sort((a, b) => a.localeCompare(b, 'pt-BR')));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching stock staff:', err);
+      }
+    };
+    fetchStockStaff();
   }, []);
 
   const categoriesList = useMemo(() => {
@@ -299,6 +323,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
   // Timestamps de última contagem
   const [lastCountQuiosque, setLastCountQuiosque] = useState<{ dateStr: string; timestamp: number } | null>(null);
   const [lastCountDeposito, setLastCountDeposito] = useState<{ dateStr: string; timestamp: number } | null>(null);
+  const [forceUnlocked, setForceUnlocked] = useState(false);
 
   // Estados de contagem por item: itemId -> ItemLocalCount
   const [counts, setCounts] = useState<Record<string, ItemLocalCount>>({});
@@ -388,12 +413,12 @@ export const StockCounting: React.FC<StockCountingProps> = ({
 
   // Verificar bloqueio de 5 dias
   const isQuiosqueLocked = useMemo(() => {
-    if (isAdmin) return false;
+    if (forceUnlocked || isAdmin) return false;
     if (!lastCountQuiosque) return false;
     const now = Date.now();
     const diff = now - lastCountQuiosque.timestamp;
     return diff < FIVE_DAYS_MS;
-  }, [lastCountQuiosque, isAdmin]);
+  }, [lastCountQuiosque, isAdmin, forceUnlocked]);
 
   const quiosqueRemainingDays = useMemo(() => {
     if (!lastCountQuiosque) return 0;
@@ -403,12 +428,12 @@ export const StockCounting: React.FC<StockCountingProps> = ({
   }, [lastCountQuiosque]);
 
   const isDepositoLocked = useMemo(() => {
-    if (isAdmin) return false;
+    if (forceUnlocked || isAdmin) return false;
     if (!lastCountDeposito) return false;
     const now = Date.now();
     const diff = now - lastCountDeposito.timestamp;
     return diff < FIVE_DAYS_MS;
-  }, [lastCountDeposito, isAdmin]);
+  }, [lastCountDeposito, isAdmin, forceUnlocked]);
 
   const depositoRemainingDays = useMemo(() => {
     if (!lastCountDeposito) return 0;
@@ -476,68 +501,86 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     return ['all', ...sorted];
   }, [availableItemsForLocation, activeLocation]);
 
-  // Carregar contagens existentes (inicialização)
+  // Carregar contagens existentes (inicialização com rascunho local e em nuvem)
   useEffect(() => {
-    const draftKey = activeLocation === 'quiosque' ? LOCAL_STORAGE_DRAFT_QUIOSQUE : LOCAL_STORAGE_DRAFT_DEPOSITO;
-    const savedDraft = localStorage.getItem(draftKey);
-    let draftParsed: Record<string, ItemLocalCount> = {};
-    if (savedDraft) {
+    const loadDrafts = async () => {
+      const draftKey = activeLocation === 'quiosque' ? LOCAL_STORAGE_DRAFT_QUIOSQUE : LOCAL_STORAGE_DRAFT_DEPOSITO;
+      const savedDraft = localStorage.getItem(draftKey);
+      let draftParsed: Record<string, ItemLocalCount> = {};
+      if (savedDraft) {
+        try {
+          draftParsed = JSON.parse(savedDraft);
+        } catch {}
+      }
+
+      // Tentar carregar rascunho compartilhado da nuvem (permite continuar em outro celular/dispositivo)
       try {
-        draftParsed = JSON.parse(savedDraft);
-      } catch {}
-    }
-
-    const initial: Record<string, ItemLocalCount> = {};
-
-    stockItems.forEach(def => {
-      const matchDb = stockData.find(s => 
-        s.produto.toLowerCase().trim() === def.produto.toLowerCase().trim() ||
-        (def.id && s.id === def.id)
-      );
-
-      const dbVal = activeLocation === 'quiosque' 
-        ? (matchDb?.estoqueQuiosque ?? 0)
-        : (matchDb?.estoqueDeposito ?? 0);
-
-      const draftVal = draftParsed[def.id];
-
-      if (draftVal) {
-        initial[def.id] = draftVal;
-      } else {
-        let cx = 0;
-        let av = 0;
-        if (def.tipoContagem === 'caixa_ou_avulso') {
-          if ((matchDb as any)?.caixasFechadas !== undefined && (matchDb as any)?.avulsos !== undefined) {
-            cx = (matchDb as any).caixasFechadas ?? 0;
-            av = (matchDb as any).avulsos ?? 0;
-          } else if (def.tamanhoCaixa && def.tamanhoCaixa > 1) {
-            cx = Math.floor(dbVal / def.tamanhoCaixa);
-            av = dbVal % def.tamanhoCaixa;
-          } else {
-            cx = 0;
-            av = dbVal;
+        const cloudRef = doc(db, getDataPath('stockDrafts'), activeLocation);
+        const cloudSnap = await getDoc(cloudRef);
+        if (cloudSnap.exists()) {
+          const cloudData = cloudSnap.data();
+          if (cloudData && cloudData.counts) {
+            draftParsed = { ...draftParsed, ...cloudData.counts };
+            localStorage.setItem(draftKey, JSON.stringify(draftParsed));
           }
         }
-
-        const totalQtyInitial = def.tipoContagem === 'caixa_ou_avulso'
-          ? (cx * (def.tamanhoCaixa && def.tamanhoCaixa > 0 ? def.tamanhoCaixa : 1)) + av
-          : dbVal;
-
-        initial[def.id] = {
-          quantidade: totalQtyInitial > 0 ? totalQtyInitial : dbVal,
-          temAberto: false,
-          caixasFechadas: cx,
-          avulsos: av,
-          statusBastante: def.tipoContagem === 'tem_bastante' ? 'bastante' : undefined,
-          modificado: false
-        };
+      } catch (err) {
+        console.warn('Could not load cloud stock draft:', err);
       }
-    });
 
-    setCounts(initial);
+      const initial: Record<string, ItemLocalCount> = {};
+
+      stockItems.forEach(def => {
+        const matchDb = stockData.find(s => 
+          s.produto.toLowerCase().trim() === def.produto.toLowerCase().trim() ||
+          (def.id && s.id === def.id)
+        );
+
+        const dbVal = activeLocation === 'quiosque' 
+          ? (matchDb?.estoqueQuiosque ?? 0)
+          : (matchDb?.estoqueDeposito ?? 0);
+
+        const draftVal = draftParsed[def.id];
+
+        if (draftVal) {
+          initial[def.id] = draftVal;
+        } else {
+          let cx = 0;
+          let av = 0;
+          if (def.tipoContagem === 'caixa_ou_avulso') {
+            if ((matchDb as any)?.caixasFechadas !== undefined && (matchDb as any)?.avulsos !== undefined) {
+              cx = (matchDb as any).caixasFechadas ?? 0;
+              av = (matchDb as any).avulsos ?? 0;
+            } else if (def.tamanhoCaixa && def.tamanhoCaixa > 1) {
+              cx = Math.floor(dbVal / def.tamanhoCaixa);
+              av = dbVal % def.tamanhoCaixa;
+            } else {
+              cx = 0;
+              av = dbVal;
+            }
+          }
+
+          const totalQtyInitial = def.tipoContagem === 'caixa_ou_avulso'
+            ? (cx * (def.tamanhoCaixa && def.tamanhoCaixa > 0 ? def.tamanhoCaixa : 1)) + av
+            : dbVal;
+
+          initial[def.id] = {
+            quantidade: totalQtyInitial > 0 ? totalQtyInitial : dbVal,
+            temAberto: false,
+            caixasFechadas: cx,
+            avulsos: av,
+            statusBastante: def.tipoContagem === 'tem_bastante' ? 'bastante' : undefined,
+            modificado: false
+          };
+        }
+      });
+
+      setCounts(initial);
+    };
+    loadDrafts();
   }, [activeLocation, stockData, stockItems]);
 
-  // Salvar rascunho local toda vez que mudar
+  // Salvar rascunho local e na nuvem toda vez que mudar
   const updateCountItem = (id: string, updater: (prev: ItemLocalCount) => ItemLocalCount) => {
     setCounts(prev => {
       const current = prev[id] || { quantidade: 0, temAberto: false, caixasFechadas: 0, avulsos: 0, modificado: false };
@@ -548,6 +591,12 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       try {
         localStorage.setItem(draftKey, JSON.stringify(next));
       } catch {}
+
+      // Sincronizar rascunho com a nuvem (Firestore) em background para handoff entre celulares
+      setDoc(doc(db, getDataPath('stockDrafts'), activeLocation), {
+        counts: next,
+        updatedAt: serverTimestamp()
+      }, { merge: true }).catch(err => console.warn('Error syncing draft to cloud:', err));
 
       return next;
     });
@@ -1071,6 +1120,10 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         setLastCountDeposito({ dateStr: nowDateBr, timestamp: nowTimestamp });
       }
 
+      try {
+        await deleteDoc(doc(db, getDataPath('stockDrafts'), activeLocation));
+      } catch {}
+
       setLastSavedOrdersCount(regularOrdersCount);
       setLastSavedCakesCount(cakesProductionCount);
       setSaveSuccess(`Contagem do ${activeLocation === 'quiosque' ? 'Quiosque' : 'Estoque'} salva com sucesso!`);
@@ -1547,16 +1600,38 @@ export const StockCounting: React.FC<StockCountingProps> = ({
 
         {/* ALERTA DE BLOQUEIO DE 5 DIAS SE APLICÁVEL */}
         {isCurrentLocationLocked && !isAdmin && (
-          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-amber-900 text-xs">
-            <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-bold">
-                A contagem do {activeLocation === 'quiosque' ? 'Quiosque' : 'Estoque'} já foi realizada recentemente.
-              </p>
-              <p className="text-amber-800/90 mt-0.5">
-                Para manter a integridade do estoque e mitigar risco de dobrar valores, só é liberada nova contagem após 5 dias.
-              </p>
+          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 text-xs">
+            <div className="flex items-start gap-2.5">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">
+                  A contagem do {activeLocation === 'quiosque' ? 'Quiosque' : 'Estoque'} já foi realizada recentemente.
+                </p>
+                <p className="text-amber-800/90 mt-0.5">
+                  Para manter a integridade do estoque e mitigar risco de dobrar valores, só é liberada nova contagem após 5 dias.
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const pass = prompt('Digite a senha para liberar a contagem:');
+                if (pass === '2024') {
+                  setLastCountQuiosque(null);
+                  setLastCountDeposito(null);
+                  setForceUnlocked(true);
+                  localStorage.removeItem(LOCAL_STORAGE_LAST_COUNT_QUIOSQUE);
+                  localStorage.removeItem(LOCAL_STORAGE_LAST_COUNT_DEPOSITO);
+                  alert('Contagem liberada com sucesso!');
+                } else if (pass !== null) {
+                  alert('Senha incorreta!');
+                }
+              }}
+              className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 cursor-pointer shadow-xs self-start sm:self-auto"
+              title="Liberar contagem com senha"
+            >
+              🔓 Liberar com Senha
+            </button>
           </div>
         )}
 
@@ -1564,16 +1639,19 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/70">
           <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 shrink-0">
             <User className="w-3.5 h-3.5 text-slate-500" />
-            Nome de quem está contando:
+            Funcionário responsável (Contagem):
           </label>
-          <input
-            type="text"
-            placeholder="Ex: Carlos, Ana..."
+          <select
             value={responsavelName}
             onChange={e => setResponsavelName(e.target.value)}
             disabled={isCurrentLocationLocked && !isAdmin}
             className="w-full bg-white border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-          />
+          >
+            <option value="">Selecione o funcionário autorizado...</option>
+            {stockStaffList.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -1802,12 +1880,17 @@ export const StockCounting: React.FC<StockCountingProps> = ({
               key={item.id}
               id={`item-card-${item.id}`}
               className={cn(
-                "bg-white rounded-2xl p-3.5 sm:p-4 border transition-all duration-300 shadow-xs",
+                "relative bg-white rounded-2xl p-3.5 sm:p-4 border transition-all duration-300 shadow-xs",
                 currentCount.modificado 
-                  ? "border-emerald-300 bg-emerald-50/15" 
+                  ? "border-emerald-300 bg-emerald-50/15 pr-10 sm:pr-12" 
                   : "border-slate-200/80 hover:border-slate-300"
               )}
             >
+              {currentCount.modificado && (
+                <div className="absolute top-3.5 right-3.5 flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white shadow-xs z-10" title="Item conferido">
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
               {/* Linha Única: Nome do Produto e Badges à esquerda, Controles à direita */}
               <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
                 <div className="min-w-0 flex-1">
