@@ -623,6 +623,12 @@ export default function App() {
     ];
 
     const loadAllCollections = async () => {
+      const todayStr = new Date().toDateString();
+      const quotaDate = localStorage.getItem('firestore_quota_date');
+      if (quotaDate !== todayStr) {
+        localStorage.removeItem('firestore_quota_exceeded');
+        localStorage.removeItem('firestore_quota_date');
+      }
       const quotaExhausted = localStorage.getItem('firestore_quota_exceeded') === 'true';
 
       for (const { name, setter } of collections) {
@@ -673,6 +679,7 @@ export default function App() {
           const errStr = error?.message || String(error);
           if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
             localStorage.setItem('firestore_quota_exceeded', 'true');
+            localStorage.setItem('firestore_quota_date', new Date().toDateString());
             if (!hasCache) {
               setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
             }
