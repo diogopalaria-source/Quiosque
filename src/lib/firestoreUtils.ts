@@ -1,4 +1,47 @@
 import { auth } from './firebase';
+import { addDoc, setDoc, updateDoc, CollectionReference, DocumentReference, DocumentData } from 'firebase/firestore';
+
+export async function safeAddDoc(colRef: CollectionReference<DocumentData>, data: any) {
+  try {
+    return await addDoc(colRef, data);
+  } catch (err: any) {
+    const errStr = err?.message || String(err);
+    if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted') || errStr.includes('offline') || errStr.includes('network')) {
+      localStorage.setItem('firestore_quota_exceeded', 'true');
+      localStorage.setItem('firestore_quota_date', new Date().toDateString());
+      try {
+        const queueKey = 'app_offline_writes_queue';
+        const existing = JSON.parse(localStorage.getItem(queueKey) || '[]');
+        existing.push({ type: 'add', path: colRef.path, data, timestamp: Date.now() });
+        localStorage.setItem(queueKey, JSON.stringify(existing));
+      } catch {}
+      console.warn('Firestore write queued offline due to quota/network limit');
+      return { id: `offline_${Date.now()}` } as DocumentReference;
+    }
+    throw err;
+  }
+}
+
+export async function safeSetDoc(docRef: DocumentReference<DocumentData>, data: any, options?: any) {
+  try {
+    return await setDoc(docRef, data, options);
+  } catch (err: any) {
+    const errStr = err?.message || String(err);
+    if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted') || errStr.includes('offline') || errStr.includes('network')) {
+      localStorage.setItem('firestore_quota_exceeded', 'true');
+      localStorage.setItem('firestore_quota_date', new Date().toDateString());
+      try {
+        const queueKey = 'app_offline_writes_queue';
+        const existing = JSON.parse(localStorage.getItem(queueKey) || '[]');
+        existing.push({ type: 'set', path: docRef.path, data, options, timestamp: Date.now() });
+        localStorage.setItem(queueKey, JSON.stringify(existing));
+      } catch {}
+      console.warn('Firestore setDoc queued offline due to quota/network limit');
+      return;
+    }
+    throw err;
+  }
+}
 
 export enum OperationType {
   CREATE = 'create',

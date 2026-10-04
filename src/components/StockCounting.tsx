@@ -48,6 +48,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
+import { safeSetDoc } from '../lib/firestoreUtils';
 import { StockItem, PurchaseRequest } from '../types';
 import { cn, formatCurrency, getDataPath, getBasePath } from '../lib/utils';
 import { 
@@ -229,7 +230,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         itemToSave.rotuloEmbalagem = formData.rotuloEmbalagem.trim() || 'caixa';
       }
 
-      await setDoc(doc(db, getDataPath('stockCountConfig'), id), itemToSave);
+      await safeSetDoc(doc(db, getDataPath('stockCountConfig'), id), itemToSave);
       setStockItems(prev => {
         const exists = prev.find(p => p.id === id);
         if (exists) {

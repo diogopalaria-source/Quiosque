@@ -27,7 +27,7 @@ import { logAction } from '../lib/logs';
 import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
 import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
 import { format } from 'date-fns';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, safeAddDoc } from '../lib/firestoreUtils';
 import { Search } from 'lucide-react';
 import { isCakeProduction, CAKE_PRODUCTION_NAMES } from '../data/kioskStockList';
 
@@ -159,7 +159,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, getDataPath('purchaseRequests')), record);
+      const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), record);
       await logAction('Criação', 'Pedido Compra', `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''}`, 'purchaseRequests', docRef.id, record);
 
       // Notification logic
