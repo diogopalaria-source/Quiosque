@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Trash2, ArrowLeft, Check, Pencil, X, Save, AlertCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getDataPath, cn, formatCurrency } from '../lib/utils';
 import { logAction } from '../lib/logs';
 
@@ -49,34 +49,53 @@ export const StaffManager: React.FC<StaffManagerProps> = ({ userId, onBack }) =>
         // Fetch staff
         const colRef = collection(db, getDataPath('systemStaff'));
         const snap = await getDocs(colRef);
+        const loaded: StaffMember[] = [];
+        const existingNames = new Set<string>();
+
         if (!snap.empty) {
-          const loaded: StaffMember[] = [];
           snap.forEach(d => {
             const data = d.data();
+            const nome = (data.nome || '').trim();
+            if (nome) existingNames.add(nome.toLowerCase());
             loaded.push({
               id: d.id,
-              nome: data.nome || '',
+              nome,
               funcao: data.funcao || 'Colaborador',
               ativo: data.ativo ?? true,
               allowedModules: data.allowedModules || ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
             } as StaffMember);
           });
-          loaded.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-          setStaffList(loaded);
-        } else {
-          // Seed defaults with all modules enabled
-          const initial = DEFAULT_STAFF.map(name => ({
-            id: name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-            nome: name,
-            funcao: 'Colaborador',
-            ativo: true,
-            allowedModules: ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
-          }));
-          for (const s of initial) {
-            await setDoc(doc(db, getDataPath('systemStaff'), s.id), { ...s, updatedAt: serverTimestamp() });
-          }
-          setStaffList(initial);
         }
+
+        // Ensure all DEFAULT_STAFF are present
+        const batch = writeBatch(db);
+        let hasChanges = false;
+        DEFAULT_STAFF.forEach(defName => {
+          if (!existingNames.has(defName.toLowerCase())) {
+            const id = defName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+            const newMember: StaffMember = {
+              id,
+              nome: defName,
+              funcao: 'Colaborador',
+              ativo: true,
+              allowedModules: ['consumption', 'payments', 'waste', 'temperature', 'stockCounting']
+            };
+            loaded.push(newMember);
+            batch.set(doc(db, getDataPath('systemStaff'), id), { ...newMember, updatedAt: serverTimestamp() });
+            hasChanges = true;
+          }
+        });
+
+        if (hasChanges) {
+          try {
+            await batch.commit();
+          } catch (e) {
+            console.warn("Could not batch seed missing default staff:", e);
+          }
+        }
+
+        loaded.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        setStaffList(loaded);
 
         // Fetch staff consumptions to calculate totals per employee
         const consSnap = await getDocs(collection(db, getDataPath('staffConsumption')));

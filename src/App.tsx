@@ -623,22 +623,31 @@ export default function App() {
     ];
 
     const loadAllCollections = async () => {
+      const quotaExhausted = localStorage.getItem('firestore_quota_exceeded') === 'true';
+
       for (const { name, setter } of collections) {
         const path = `${dataPath}/${name}`;
         const cacheKey = `app_cache_${path}`;
 
         // 1. Carregar do cache local para renderização instantânea sem gastar cota
+        let hasCache = false;
         try {
           const cached = localStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setter(parsed);
+              hasCache = true;
             }
           }
         } catch {}
 
-        // 2. Buscar dados atualizados uma única vez via getDocs (otimizado para o plano gratuito)
+        // Se a cota já esgotou e temos cache, pula a chamada de rede para evitar erros e consumir cota
+        if (quotaExhausted && hasCache) {
+          continue;
+        }
+
+        // 2. Buscar dados atualizados via getDocs
         try {
           const q = query(collection(db, path));
           const snap = await getDocs(q);
@@ -661,11 +670,15 @@ export default function App() {
             localStorage.setItem(cacheKey, JSON.stringify(data));
           } catch {}
         } catch (error: any) {
-          console.warn(`Error fetching ${name}:`, error);
-          handleFirestoreError(error, OperationType.LIST, path);
           const errStr = error?.message || String(error);
           if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
-            setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
+            localStorage.setItem('firestore_quota_exceeded', 'true');
+            if (!hasCache) {
+              setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
+            }
+          } else {
+            console.warn(`Error fetching ${name}:`, error);
+            handleFirestoreError(error, OperationType.LIST, path);
           }
         }
       }
