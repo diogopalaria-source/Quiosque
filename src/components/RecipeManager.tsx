@@ -193,10 +193,12 @@ export const RecipeManager: React.FC<RecipeManagerProps> = ({ userId, onBack }) 
 
       if (editingRecipe?.id) {
         await updateDoc(doc(db, dataPath, editingRecipe.id), recipeData);
+        setRecipes(prev => prev.map(r => r.id === editingRecipe.id ? { ...recipeData, id: editingRecipe.id } : r));
         await logAction('Edição', 'Ficha Técnica', `Atualizou ficha técnica de "${productName}"`, 'recipes', editingRecipe.id, recipeData);
         alert('Ficha técnica atualizada com sucesso!');
       } else {
         const docRef = await addDoc(collection(db, dataPath), recipeData);
+        setRecipes(prev => [{ ...recipeData, id: docRef.id }, ...prev]);
         await logAction('Criação', 'Ficha Técnica', `Cadastrou nova ficha técnica de "${productName}"`, 'recipes', docRef.id, recipeData);
         alert('Ficha técnica cadastrada com sucesso!');
       }
@@ -214,6 +216,7 @@ export const RecipeManager: React.FC<RecipeManagerProps> = ({ userId, onBack }) 
     try {
       const existingRecipe = recipes.find(r => r.id === id);
       await deleteDoc(doc(db, dataPath, id));
+      setRecipes(prev => prev.filter(r => r.id !== id));
       await logAction('Exclusão', 'Ficha Técnica', `Excluiu ficha técnica de "${existingRecipe?.produtoFinal || id}"`, 'recipes', id, existingRecipe || {});
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, dataPath);

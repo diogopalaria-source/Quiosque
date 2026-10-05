@@ -26,9 +26,9 @@ import {
   ReferenceLine 
 } from 'recharts';
 import { db, auth } from '../lib/firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
 import { TemperatureMeasurement } from '../types';
-import { handleFirestoreError, OperationType } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, safeAddDoc } from '../lib/firestoreUtils';
 import { logAction } from '../lib/logs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -125,7 +125,8 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
     const path = getDataPath('temperatureMeasurements');
     const q = query(
       collection(db, path),
-      orderBy('data_registro', 'desc')
+      orderBy('data_registro', 'desc'),
+      limit(150)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -355,7 +356,23 @@ export const TemperatureControl: React.FC<TemperatureControlProps> = ({
       };
 
       const path = getDataPath('temperatureMeasurements');
-      const docRef = await addDoc(collection(db, path), record);
+      const docRef = await safeAddDoc(collection(db, path), record);
+
+      const newMeasurement: TemperatureMeasurement = {
+        ...record,
+        id: docRef?.id || `temp_${Date.now()}`
+      };
+
+      // Atualização otimista imediata na tabela e gráficos abaixo
+      setMeasurements(prev => {
+        const next = [newMeasurement, ...prev.filter(m => m.id !== newMeasurement.id)];
+        try {
+          localStorage.setItem(`app_cache_${path}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+
+      window.dispatchEvent(new CustomEvent('temperature-updated', { detail: newMeasurement }));
 
       // Log the creation in system logs
       await logAction(

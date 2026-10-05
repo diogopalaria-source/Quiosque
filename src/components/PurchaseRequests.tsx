@@ -21,7 +21,7 @@ import {
   ChefHat
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where, onSnapshot, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
 import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
@@ -90,11 +90,12 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
     }
   }, [requests]);
 
-  // Listener em tempo real do Firestore para pedidos de compra
+  // Listener em tempo real do Firestore para pedidos de compra (limitado para preservar cota diária)
   React.useEffect(() => {
     try {
       const colRef = collection(db, getDataPath('purchaseRequests'));
-      const unsubscribe = onSnapshot(colRef, (snap) => {
+      const q = query(colRef, limit(200));
+      const unsubscribe = onSnapshot(q, (snap) => {
         const items: PurchaseRequest[] = [];
         snap.forEach(docSnap => {
           items.push({ ...docSnap.data(), id: docSnap.id } as PurchaseRequest);

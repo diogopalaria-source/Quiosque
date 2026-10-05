@@ -77,16 +77,24 @@ export const StaffDiscountManager: React.FC<StaffDiscountManagerProps> = ({
     return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [customStaffProducts]);
 
+  const [localOverrides, setLocalOverrides] = useState<StaffDiscountOverride[]>(overrides || []);
+
+  useEffect(() => {
+    if (overrides) {
+      setLocalOverrides(overrides);
+    }
+  }, [overrides]);
+
   // Map overrides by product ID for quick access
   const overridesMap = useMemo(() => {
     const map: Record<string, StaffDiscountOverride> = {};
-    overrides.forEach(o => {
+    localOverrides.forEach(o => {
       if (o.productId) {
         map[o.productId] = o;
       }
     });
     return map;
-  }, [overrides]);
+  }, [localOverrides]);
 
   // Compute final lists with both original and override
   const productsWithDiscounts = useMemo(() => {
@@ -139,12 +147,20 @@ export const StaffDiscountManager: React.FC<StaffDiscountManagerProps> = ({
 
     try {
       const docRef = doc(db, `${dataPath}/staffDiscountOverrides`, product.id);
-      await setDoc(docRef, {
+      const newOverride: StaffDiscountOverride = {
         productId: product.id,
         productName: product.nome,
         descontoPercent: percentVal,
         updatedAt: new Date().toISOString()
+      };
+
+      await setDoc(docRef, newOverride);
+
+      setLocalOverrides(prev => {
+        const next = [...prev.filter(o => o.productId !== product.id), newOverride];
+        return next;
       });
+      window.dispatchEvent(new CustomEvent('staff-overrides-updated', { detail: newOverride }));
 
       await logAction('Edição', 'Ajuste Desconto', `Alterado desconto do produto "${product.nome}" para ${percentVal}% (Padrão: ${product.descontoPercent}%)`, 'staffDiscountOverrides', product.id, { percentVal });
 
@@ -167,6 +183,9 @@ export const StaffDiscountManager: React.FC<StaffDiscountManagerProps> = ({
     try {
       const docRef = doc(db, `${dataPath}/staffDiscountOverrides`, product.id);
       await deleteDoc(docRef);
+
+      setLocalOverrides(prev => prev.filter(o => o.productId !== product.id));
+      window.dispatchEvent(new CustomEvent('staff-overrides-deleted', { detail: product.id }));
 
       await logAction('Exclusão', 'Ajuste Desconto', `Restaurado desconto padrão do produto "${product.nome}" para ${product.descontoPercent}%`, 'staffDiscountOverrides', product.id, {});
 

@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
+import { safeAddDoc, safeUpdateDoc } from '../lib/firestoreUtils';
 import { WasteRecord, StaffConsumption, StaffPayment, Sale, StockItem, Recipe, Purchase, MACRO_INGREDIENTS, StaffDiscountOverride } from '../types';
 import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
 import { SearchableSelect } from './SearchableSelect';
@@ -338,9 +339,9 @@ type Mode = 'waste' | 'consumption' | 'payments';
 export const WasteRegistration: React.FC<WasteRegistrationProps> = ({ 
   userId, 
   onBack, 
-  wasteRecords,
-  staffConsumptions,
-  staffPayments,
+  wasteRecords: initialWasteRecords = [],
+  staffConsumptions: initialStaffConsumptions = [],
+  staffPayments: initialStaffPayments = [],
   userRole,
   initialMode = 'waste',
   salesData = [],
@@ -352,6 +353,71 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
 }) => {
   const [activeMode, setActiveMode] = React.useState<Mode>(initialMode);
   const [systemStaffList, setSystemStaffList] = React.useState<any[]>([]);
+
+  // Estados reativos locais com suporte a cache instantâneo e auto-atualização sem reload
+  const [wasteRecords, setWasteRecords] = React.useState<WasteRecord[]>(() => {
+    try {
+      const cached = localStorage.getItem(`app_cache_${getDataPath('wasteRecords')}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialWasteRecords || [];
+  });
+
+  const [staffConsumptions, setStaffConsumptions] = React.useState<StaffConsumption[]>(() => {
+    try {
+      const cached = localStorage.getItem(`app_cache_${getDataPath('staffConsumption')}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialStaffConsumptions || [];
+  });
+
+  const [staffPayments, setStaffPayments] = React.useState<StaffPayment[]>(() => {
+    try {
+      const cached = localStorage.getItem(`app_cache_${getDataPath('staffPayments')}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return initialStaffPayments || [];
+  });
+
+  // Manter sincronizado quando as props externas mudam, sem apagar os registros adicionados na sessão
+  React.useEffect(() => {
+    if (initialWasteRecords && initialWasteRecords.length > 0) {
+      setWasteRecords(prev => {
+        const propMap = new Map(initialWasteRecords.map(w => [w.id, w]));
+        const localOnly = prev.filter(w => w.id && !propMap.has(w.id));
+        return [...initialWasteRecords, ...localOnly];
+      });
+    }
+  }, [initialWasteRecords]);
+
+  React.useEffect(() => {
+    if (initialStaffConsumptions && initialStaffConsumptions.length > 0) {
+      setStaffConsumptions(prev => {
+        const propMap = new Map(initialStaffConsumptions.map(c => [c.id, c]));
+        const localOnly = prev.filter(c => c.id && !propMap.has(c.id));
+        return [...initialStaffConsumptions, ...localOnly];
+      });
+    }
+  }, [initialStaffConsumptions]);
+
+  React.useEffect(() => {
+    if (initialStaffPayments && initialStaffPayments.length > 0) {
+      setStaffPayments(prev => {
+        const propMap = new Map(initialStaffPayments.map(p => [p.id, p]));
+        const localOnly = prev.filter(p => p.id && !propMap.has(p.id));
+        return [...initialStaffPayments, ...localOnly];
+      });
+    }
+  }, [initialStaffPayments]);
 
   React.useEffect(() => {
     const fetchStaff = async () => {
@@ -658,8 +724,18 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         };
         
         const docRef = doc(db, getDataPath('staffConsumption'), editingTx.id);
-        await updateDoc(docRef, updatedRecord);
+        await safeUpdateDoc(docRef, updatedRecord);
         
+        // Atualização reativa imediata na lista abaixo
+        setStaffConsumptions(prev => {
+          const next = prev.map(c => c.id === editingTx.id ? { ...c, ...updatedRecord } : c);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('staffConsumption')}`, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('staff-consumption-updated', { detail: { id: editingTx.id, ...updatedRecord } }));
+
         await logAction(
           'Edição',
           'Consumo Equipe',
@@ -677,8 +753,18 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         };
         
         const docRef = doc(db, getDataPath('staffPayments'), editingTx.id);
-        await updateDoc(docRef, updatedRecord);
-        
+        await safeUpdateDoc(docRef, updatedRecord);
+
+        // Atualização reativa imediata na lista abaixo
+        setStaffPayments(prev => {
+          const next = prev.map(p => p.id === editingTx.id ? { ...p, ...updatedRecord } : p);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('staffPayments')}`, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('staff-payments-updated', { detail: { id: editingTx.id, ...updatedRecord } }));
+
         await logAction(
           'Edição',
           'Pagamento Equipe',
@@ -710,6 +796,27 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
       const docRef = doc(db, getDataPath(collectionPath), deletingTx.id);
       
       await deleteDoc(docRef);
+
+      // Remoção reativa imediata na lista abaixo
+      if (isDebit) {
+        setStaffConsumptions(prev => {
+          const next = prev.filter(c => c.id !== deletingTx.id);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('staffConsumption')}`, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('staff-consumption-deleted', { detail: deletingTx.id }));
+      } else {
+        setStaffPayments(prev => {
+          const next = prev.filter(p => p.id !== deletingTx.id);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('staffPayments')}`, JSON.stringify(next));
+          } catch {}
+          return next;
+        });
+        window.dispatchEvent(new CustomEvent('staff-payments-deleted', { detail: deletingTx.id }));
+      }
       
       await logAction(
         'Exclusão',
@@ -830,7 +937,17 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
       }
 
       const docRef = doc(db, getDataPath('wasteRecords'), originalRecord.id);
-      await updateDoc(docRef, updatedRecord);
+      await safeUpdateDoc(docRef, updatedRecord);
+
+      // Atualização imediata na lista de descartes abaixo
+      setWasteRecords(prev => {
+        const next = prev.map(w => w.id === originalRecord.id ? { ...w, ...updatedRecord } : w);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('wasteRecords')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('waste-records-updated', { detail: { id: originalRecord.id, ...updatedRecord } }));
 
       await logAction(
         'Edição',
@@ -869,6 +986,16 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
 
       const docRef = doc(db, getDataPath('wasteRecords'), originalRecord.id);
       await deleteDoc(docRef);
+
+      // Remoção imediata na lista de descartes abaixo
+      setWasteRecords(prev => {
+        const next = prev.filter(w => w.id !== originalRecord.id);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('wasteRecords')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('waste-records-deleted', { detail: originalRecord.id }));
 
       await logAction(
         'Exclusão',
@@ -1062,8 +1189,23 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, getDataPath('wasteRecords')), record);
-      await logAction('Criação', 'Descarte', `Registrou descarte de ${record.quantidade} un de ${record.produto}`, 'wasteRecords', docRef.id, record);
+      const docRef = await safeAddDoc(collection(db, getDataPath('wasteRecords')), record);
+      const newWasteRecord = {
+        ...record,
+        id: docRef?.id || `waste_${Date.now()}`
+      } as WasteRecord;
+
+      // Auto-atualização reativa imediata na tabela de descarte abaixo
+      setWasteRecords(prev => {
+        const next = [newWasteRecord, ...prev.filter(w => w.id !== newWasteRecord.id)];
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('wasteRecords')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('waste-records-updated', { detail: newWasteRecord }));
+
+      await logAction('Criação', 'Descarte', `Registrou descarte de ${record.quantidade} un de ${record.produto}`, 'wasteRecords', docRef?.id || newWasteRecord.id, record);
       
       // Auto-deduct stock for waste with 'Descarte' action
       if (record.acao === 'Descarte') {
@@ -1135,8 +1277,9 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
       const finalProductName = `${finalProductNameBase}${quantityStr}${splitStr}`;
 
       const participants = [consumptionForm.funcionario, ...consumptionForm.divididoCom];
+      const createdItems: StaffConsumption[] = [];
       
-      const promises = participants.map(participant => {
+      const promises = participants.map(async (participant, pIdx) => {
         const record = {
           data: consumptionForm.data,
           mes: formatWasteDate(consumptionForm.data, 'MM/yyyy'),
@@ -1150,13 +1293,27 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
           userId: userId || getBasePath(),
           createdAt: serverTimestamp()
         };
-        return addDoc(collection(db, getDataPath('staffConsumption')), record).then(async (docRef) => {
-          await logAction('Criação', 'Consumo Equipe', `Registrou consumo para ${record.funcionario}: ${record.quantidade} un de ${record.produto}`, 'staffConsumption', docRef.id, record);
-          return docRef;
-        });
+        const docRef = await safeAddDoc(collection(db, getDataPath('staffConsumption')), record);
+        const itemWithId = {
+          ...record,
+          id: docRef?.id || `staff_cons_${Date.now()}_${pIdx}`
+        } as StaffConsumption;
+        createdItems.push(itemWithId);
+        await logAction('Criação', 'Consumo Equipe', `Registrou consumo para ${record.funcionario}: ${record.quantidade} un de ${record.produto}`, 'staffConsumption', docRef?.id || itemWithId.id, record);
+        return itemWithId;
       });
 
       await Promise.all(promises);
+
+      // Auto-atualização reativa imediata na lista de consumo abaixo
+      setStaffConsumptions(prev => {
+        const next = [...createdItems, ...prev.filter(c => !createdItems.some(ci => ci.id === c.id))];
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('staffConsumption')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('staff-consumption-updated', { detail: createdItems }));
       
       // Auto-deduct stock for staff consumption
       try {
@@ -1205,8 +1362,23 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
         createdAt: serverTimestamp()
       };
 
-      const docRef = await addDoc(collection(db, getDataPath('staffPayments')), record);
-      await logAction('Criação', 'Pagamento Equipe', `Registrou pagamento para ${record.funcionario} de R$ ${record.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'staffPayments', docRef.id, record);
+      const docRef = await safeAddDoc(collection(db, getDataPath('staffPayments')), record);
+      const newPayment = {
+        ...record,
+        id: docRef?.id || `staff_pay_${Date.now()}`
+      } as StaffPayment;
+
+      // Auto-atualização reativa imediata na lista de pagamentos abaixo
+      setStaffPayments(prev => {
+        const next = [newPayment, ...prev.filter(p => p.id !== newPayment.id)];
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('staffPayments')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('staff-payments-updated', { detail: newPayment }));
+
+      await logAction('Criação', 'Pagamento Equipe', `Registrou pagamento para ${record.funcionario} de R$ ${record.valorPago.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'staffPayments', docRef?.id || newPayment.id, record);
       
       setSuccess(true);
       setPaymentForm({

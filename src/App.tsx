@@ -725,6 +725,104 @@ export default function App() {
     loadAllCollections();
   }, [dataPath]);
 
+  // Listener para atualizações reativas automáticas em tela (Consumo, Pagamentos, Descartes, Compras, etc.)
+  // Mantém os dados da tela 100% atualizados sem disparar novas leituras no Firestore (preserva a cota diária gratuita)
+  useEffect(() => {
+    const handleStaffConsUpdated = (e: any) => {
+      const detail = e.detail;
+      const items = Array.isArray(detail) ? detail : [detail];
+      setStaffConsumptionData(prev => {
+        const map = new Map(prev.map(i => [i.id, i]));
+        items.forEach(it => { if (it && it.id) map.set(it.id, { ...map.get(it.id), ...it }); });
+        return Array.from(map.values());
+      });
+    };
+
+    const handleStaffConsDeleted = (e: any) => {
+      const id = e.detail;
+      setStaffConsumptionData(prev => prev.filter(i => i.id !== id));
+    };
+
+    const handleStaffPayUpdated = (e: any) => {
+      const item = e.detail;
+      setStaffPaymentsData(prev => {
+        const map = new Map(prev.map(i => [i.id, i]));
+        if (item && item.id) map.set(item.id, { ...map.get(item.id), ...item });
+        return Array.from(map.values());
+      });
+    };
+
+    const handleStaffPayDeleted = (e: any) => {
+      const id = e.detail;
+      setStaffPaymentsData(prev => prev.filter(i => i.id !== id));
+    };
+
+    const handleWasteUpdated = (e: any) => {
+      const item = e.detail;
+      setWasteData(prev => {
+        const map = new Map(prev.map(i => [i.id, i]));
+        if (item && item.id) map.set(item.id, { ...map.get(item.id), ...item });
+        return Array.from(map.values());
+      });
+    };
+
+    const handleWasteDeleted = (e: any) => {
+      const id = e.detail;
+      setWasteData(prev => prev.filter(i => i.id !== id));
+    };
+
+    const handlePurchaseRequestsUpdated = (e: any) => {
+      const item = e.detail;
+      setPurchaseRequestsData(prev => {
+        const map = new Map(prev.map(i => [i.id, i]));
+        if (item && item.id) map.set(item.id, { ...map.get(item.id), ...item });
+        return Array.from(map.values());
+      });
+    };
+
+    const handlePurchaseRequestsDeleted = (e: any) => {
+      const id = e.detail;
+      setPurchaseRequestsData(prev => prev.filter(i => i.id !== id));
+    };
+
+    const handleStaffOverridesUpdated = (e: any) => {
+      const item = e.detail;
+      setStaffDiscountOverrides(prev => {
+        const next = [...prev.filter(o => o.productId !== item.productId), item];
+        return next;
+      });
+    };
+
+    const handleStaffOverridesDeleted = (e: any) => {
+      const prodId = e.detail;
+      setStaffDiscountOverrides(prev => prev.filter(o => o.productId !== prodId));
+    };
+
+    window.addEventListener('staff-consumption-updated', handleStaffConsUpdated);
+    window.addEventListener('staff-consumption-deleted', handleStaffConsDeleted);
+    window.addEventListener('staff-payments-updated', handleStaffPayUpdated);
+    window.addEventListener('staff-payments-deleted', handleStaffPayDeleted);
+    window.addEventListener('waste-records-updated', handleWasteUpdated);
+    window.addEventListener('waste-records-deleted', handleWasteDeleted);
+    window.addEventListener('purchase-requests-updated', handlePurchaseRequestsUpdated);
+    window.addEventListener('purchase-requests-deleted', handlePurchaseRequestsDeleted);
+    window.addEventListener('staff-overrides-updated', handleStaffOverridesUpdated);
+    window.addEventListener('staff-overrides-deleted', handleStaffOverridesDeleted);
+
+    return () => {
+      window.removeEventListener('staff-consumption-updated', handleStaffConsUpdated);
+      window.removeEventListener('staff-consumption-deleted', handleStaffConsDeleted);
+      window.removeEventListener('staff-payments-updated', handleStaffPayUpdated);
+      window.removeEventListener('staff-payments-deleted', handleStaffPayDeleted);
+      window.removeEventListener('waste-records-updated', handleWasteUpdated);
+      window.removeEventListener('waste-records-deleted', handleWasteDeleted);
+      window.removeEventListener('purchase-requests-updated', handlePurchaseRequestsUpdated);
+      window.removeEventListener('purchase-requests-deleted', handlePurchaseRequestsDeleted);
+      window.removeEventListener('staff-overrides-updated', handleStaffOverridesUpdated);
+      window.removeEventListener('staff-overrides-deleted', handleStaffOverridesDeleted);
+    };
+  }, []);
+
   // Data patching for specific known errors (Alexandre 2029) and Natan -> Nathan migration
   useEffect(() => {
     if (!dataPath || !isAuthorized || !user) return;

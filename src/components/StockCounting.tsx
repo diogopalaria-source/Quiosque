@@ -48,7 +48,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
-import { safeSetDoc } from '../lib/firestoreUtils';
+import { safeSetDoc, safeAddDoc, safeUpdateDoc } from '../lib/firestoreUtils';
 import { StockItem, PurchaseRequest } from '../types';
 import { cn, formatCurrency, getDataPath, getBasePath } from '../lib/utils';
 import { 
@@ -1102,15 +1102,17 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           try {
             const { existingId, ...reqData } = req;
             if (existingId) {
-              await updateDoc(doc(db, getDataPath('purchaseRequests'), existingId), {
+              await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), existingId), {
                 ...reqData,
                 updatedAt: serverTimestamp()
               });
+              window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { id: existingId, ...reqData } }));
             } else {
-              await addDoc(collection(db, getDataPath('purchaseRequests')), {
+              const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), {
                 ...reqData,
                 createdAt: serverTimestamp()
               });
+              window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { id: docRef?.id, ...reqData } }));
             }
           } catch (err) {
             console.error('Erro ao adicionar pedido de compra / produção:', err);

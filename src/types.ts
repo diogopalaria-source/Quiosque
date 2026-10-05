@@ -200,7 +200,7 @@ export interface StaffDiscountOverride {
   productId: string;
   productName: string;
   descontoPercent: number;
-  userId: string;
+  userId?: string;
   updatedAt?: any;
 }
 
