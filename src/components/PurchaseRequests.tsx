@@ -27,9 +27,9 @@ import { logAction } from '../lib/logs';
 import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
 import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
 import { format } from 'date-fns';
-import { handleFirestoreError, OperationType, safeAddDoc } from '../lib/firestoreUtils';
+import { handleFirestoreError, OperationType, safeAddDoc, safeUpdateDoc } from '../lib/firestoreUtils';
 import { Search } from 'lucide-react';
-import { isCakeProduction, CAKE_PRODUCTION_NAMES } from '../data/kioskStockList';
+import { isCakeProduction, CAKE_PRODUCTION_NAMES, PREDEFINED_STOCK_ITEMS } from '../data/kioskStockList';
 
 interface PurchaseRequestsProps {
   userId: string;
@@ -43,15 +43,51 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   userId, 
   requests,
   userRole,
-  purchasesData = []
+  purchasesData = [],
+  stockData = []
 }) => {
   const isAdmin = userRole === 'admin';
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newRequest, setNewRequest] = useState('');
+  const [newQuantity, setNewQuantity] = useState('');
+  const [newUnit, setNewUnit] = useState('un');
+  const [newRequester, setNewRequester] = useState(() => {
+    try {
+      return localStorage.getItem('last_purchase_solicitante') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [newObs, setNewObs] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
+  const [staffList, setStaffList] = useState<string[]>([]);
+
+  // Carregar lista de colaboradores cadastrados
+  React.useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const snap = await getDocs(collection(db, getDataPath('systemStaff')));
+        if (!snap.empty) {
+          const names: string[] = [];
+          snap.forEach(d => {
+            const data = d.data();
+            if (data.nome && typeof data.nome === 'string') {
+              names.push(data.nome.trim());
+            }
+          });
+          if (names.length > 0) {
+            setStaffList(Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'pt-BR')));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching staff for purchase requests:', err);
+      }
+    };
+    fetchStaff();
+  }, []);
 
   const dynamicSuppliers = React.useMemo(() => {
     const baseSuppliers = [
@@ -139,35 +175,74 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   
   const handleAddRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRequest.trim()) return;
+    const cleanProd = newRequest.trim();
+    if (!cleanProd) {
+      setError('Por favor, informe o nome do produto.');
+      setTimeout(() => setError(null), 4000);
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
-      const isCake = isCakeProduction(newRequest.trim());
-      const record: Omit<PurchaseRequest, 'id'> = {
-        produto: newRequest.trim(),
+      const isCake = isCakeProduction(cleanProd);
+      const requester = newRequester.trim() || (isCake ? 'Operação (Produção Interna)' : 'Operação');
+      
+      try {
+        if (newRequester.trim()) {
+          localStorage.setItem('last_purchase_solicitante', newRequester.trim());
+        }
+      } catch {}
+
+      const record: Record<string, any> = {
+        produto: cleanProd,
         status: 'pendente',
-        usuarioSolicitante: isCake ? 'Operação (Produção Interna)' : 'Operação',
+        usuarioSolicitante: requester,
         dataSolicitacao: format(new Date(), 'yyyy-MM-dd'),
-        urgente: isUrgent,
+        urgente: Boolean(isUrgent),
         tipoItem: isCake ? 'producao' : 'compra',
-        ehProducao: isCake,
-        quantidade: isCake ? '10 un' : undefined,
-        quantidadeNumerica: isCake ? 10 : undefined,
-        userId: userId,
+        ehProducao: Boolean(isCake),
+        userId: userId || getBasePath(),
         createdAt: serverTimestamp()
       };
 
+      if (isCake) {
+        record.quantidade = newQuantity.trim() ? `${newQuantity.trim()} un` : '10 un';
+        record.quantidadeNumerica = newQuantity.trim() ? (Number(newQuantity.trim()) || 10) : 10;
+      } else if (newQuantity.trim()) {
+        record.quantidade = `${newQuantity.trim()} ${newUnit || 'un'}`.trim();
+        const num = parseFloat(newQuantity.replace(',', '.'));
+        if (!isNaN(num) && num > 0) {
+          record.quantidadeNumerica = num;
+        }
+      }
+
+      if (newObs.trim()) {
+        record.observacao = newObs.trim();
+      }
+
       const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), record);
-      await logAction('Criação', 'Pedido Compra', `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''}`, 'purchaseRequests', docRef.id, record);
+      
+      try {
+        await logAction(
+          'Criação', 
+          'Pedido Compra', 
+          `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''} por ${requester}`, 
+          'purchaseRequests', 
+          docRef.id, 
+          record,
+          requester
+        );
+      } catch (logErr) {
+        console.warn('Não foi possível gravar log:', logErr);
+      }
 
       // Notification logic
       if (isUrgent) {
         if ('Notification' in window) {
           if (Notification.permission === 'granted') {
             new Notification('COMPRA URGENTE SOLICITADA!', {
-              body: `O produto "${newRequest.trim()}" foi marcado como urgente.`,
+              body: `O produto "${cleanProd}" foi marcado como urgente por ${requester}.`,
               icon: '/favicon.ico'
             });
           } else if (Notification.permission !== 'denied') {
@@ -177,13 +252,23 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       }
 
       setNewRequest('');
+      setNewQuantity('');
+      setNewObs('');
       setIsUrgent(false);
       setShowAddForm(false);
       setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: any) {
+      console.error('Erro ao adicionar pedido de compra:', err);
       handleFirestoreError(err, OperationType.WRITE, getDataPath('purchaseRequests'));
-      setError('Erro ao salvar solicitação. Verifique sua conexão.');
+      const msg = err?.message || '';
+      if (msg.includes('Quota limit exceeded')) {
+        setError('Solicitação registrada em modo offline com sucesso!');
+        setSuccess(true);
+      } else {
+        setError('Erro ao salvar solicitação. Verifique sua conexão.');
+      }
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -286,7 +371,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         naoConsiderarEstoque: confirmModal.naoConsiderarEstoque,
         fornecedor: confirmModal.fornecedor
       };
-      await updateDoc(requestRef, payloadUpdate);
+      await safeUpdateDoc(requestRef, payloadUpdate);
       await logAction('Edição', 'Pedido Compra', `Marcou solicitacao de "${confirmModal.request.produto}" como comprado`, 'purchaseRequests', confirmModal.request.id!, { ...confirmModal.request, ...payloadUpdate });
 
       setConfirmModal({ ...confirmModal, show: false, request: null });
@@ -330,7 +415,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         const newQuiosque = destino === 'quiosque' ? currentQuiosque + qtd : currentQuiosque;
         const newDeposito = destino === 'deposito' ? currentDeposito + qtd : currentDeposito;
 
-        await updateDoc(stockDoc.ref, {
+        await safeUpdateDoc(stockDoc.ref, {
           estoqueAtual: newTotal,
           estoqueQuiosque: newQuiosque,
           estoqueDeposito: newDeposito,
@@ -339,7 +424,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
           updatedAt: serverTimestamp()
         });
       } else {
-        await addDoc(stockColRef, {
+        await safeAddDoc(stockColRef, {
           produto: req.produto,
           estoqueAtual: qtd,
           estoqueQuiosque: destino === 'quiosque' ? qtd : 0,
@@ -358,7 +443,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
       // 2. Atualizar o pedido para 'recebido'
       if (req.id) {
-        await updateDoc(doc(db, getDataPath('purchaseRequests'), req.id), {
+        await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id), {
           status: 'recebido',
           dataRecebimento: format(new Date(), 'yyyy-MM-dd'),
           quantidadeRecebida: qtd,
@@ -410,7 +495,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         status: 'recebido',
         dataRecebimento: format(new Date(), 'yyyy-MM-dd')
       };
-      await updateDoc(doc(db, pathRequests, req.id), updatedReqPayload);
+      await safeUpdateDoc(doc(db, pathRequests, req.id), updatedReqPayload);
       await logAction('Edição', 'Pedido Compra', `Confirmou recebimento de "${req.produto}"`, 'purchaseRequests', req.id, { ...req, ...updatedReqPayload });
 
       const qtyToAdd = req.quantidadeNumerica || Number(req.quantidade?.split(' ')[0]) || 0;
@@ -441,7 +526,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         }
 
         const pathPurchases = getDataPath('purchases');
-        const purchaseDocRef = await addDoc(collection(db, pathPurchases), purchaseRecord);
+        const purchaseDocRef = await safeAddDoc(collection(db, pathPurchases), purchaseRecord);
         await logAction('Criação', 'Lançamento Manual', `Compra registrada por recebimento de "${stockProductName}"`, 'purchases', purchaseDocRef.id, purchaseRecord);
 
         // ONLY update stock if not desconsiderado
@@ -456,7 +541,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
             const newQty = (Number(currentData.estoqueAtual) || 0) + qtyToAdd;
             const unitPrice = req.valorUnitario || Number(currentData.custoUnitario) || 0;
             
-            await updateDoc(stockDoc.ref, {
+            await safeUpdateDoc(stockDoc.ref, {
               estoqueAtual: newQty,
               custoUnitario: unitPrice,
               valorTotal: newQty * unitPrice
@@ -470,7 +555,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
               valorTotal: qtyToAdd * (req.valorUnitario || 0),
               userId: userId || getBasePath()
             };
-            const stockDocRef = await addDoc(stockRef, newStockDoc);
+            const stockDocRef = await safeAddDoc(stockRef, newStockDoc);
             await logAction('Criação', 'Ajuste Estoque', `Criou item de estoque "${stockProductName}" via recebimento`, 'stock', stockDocRef.id, newStockDoc);
           }
         }
@@ -587,47 +672,181 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   onSubmit={handleAddRequest}
-                  className="bg-white p-4 rounded-2xl shadow-sm border-2 border-blue-100"
+                  className="bg-white p-4 sm:p-5 rounded-2xl shadow-md border-2 border-blue-200 space-y-3"
                 >
-                  <input 
-                    autoFocus
-                    placeholder="Nome do produto..."
-                    className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 border-none p-0 focus:ring-0 mb-4"
-                    value={newRequest}
-                    onChange={(e) => setNewRequest(e.target.value)}
-                  />
-                  <div className="flex items-center gap-2 mb-4 p-2 bg-slate-50 rounded-xl">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingCart className="w-4 h-4 text-blue-600" />
+                      Cadastrar Produto para Compras
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(false)}
+                      className="text-slate-400 hover:text-slate-600 p-1"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Nome do Produto */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                      Produto *
+                    </label>
+                    <input 
+                      autoFocus
+                      placeholder="Ex: Cookie Macadâmia, Café Grão, Copo 300ml..."
+                      className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
+                      value={newRequest}
+                      onChange={(e) => setNewRequest(e.target.value)}
+                    />
+
+                    {/* Quick suggestions when typing */}
+                    {newRequest.trim().length >= 2 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                        {PREDEFINED_STOCK_ITEMS
+                          .filter(i => i.produto.toLowerCase().includes(newRequest.toLowerCase().trim()))
+                          .slice(0, 5)
+                          .map(item => (
+                            <button
+                              type="button"
+                              key={item.id}
+                              onClick={() => {
+                                setNewRequest(item.produto);
+                                if (item.unidadeMedida) {
+                                  setNewUnit(item.unidadeMedida);
+                                }
+                              }}
+                              className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 rounded-md border border-slate-200 transition-colors"
+                            >
+                              + {item.produto}
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quantidade e Unidade */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                        Quantidade (Opcional)
+                      </label>
+                      <input 
+                        type="text"
+                        placeholder="Ex: 2, 4, 10..."
+                        className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none"
+                        value={newQuantity}
+                        onChange={(e) => setNewQuantity(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                        Unidade
+                      </label>
+                      <select
+                        value={newUnit}
+                        onChange={(e) => setNewUnit(e.target.value)}
+                        className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
+                      >
+                        <option value="un">Unidade (un)</option>
+                        <option value="cx">Caixa (cx)</option>
+                        <option value="fardo">Fardo</option>
+                        <option value="pct">Pacote (pct)</option>
+                        <option value="kg">Quilo (kg)</option>
+                        <option value="litro">Litro (L)</option>
+                        <option value="lata">Lata</option>
+                        <option value="balde">Balde</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Solicitante */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                      Quem está solicitando
+                    </label>
+                    {staffList.length > 0 ? (
+                      <select
+                        value={newRequester}
+                        onChange={(e) => setNewRequester(e.target.value)}
+                        className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
+                      >
+                        <option value="">Selecione o atendente / responsável...</option>
+                        {staffList.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                        <option value="Operação (Quiosque)">Operação (Quiosque)</option>
+                      </select>
+                    ) : (
+                      <input 
+                        type="text"
+                        placeholder="Nome do atendente..."
+                        className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
+                        value={newRequester}
+                        onChange={(e) => setNewRequester(e.target.value)}
+                      />
+                    )}
+                  </div>
+
+                  {/* Observação Opcional */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                      Observação (Opcional)
+                    </label>
+                    <input 
+                      type="text"
+                      placeholder="Ex: Marca específica, comprar hoje..."
+                      className="w-full text-xs font-semibold text-slate-700 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
+                      value={newObs}
+                      onChange={(e) => setNewObs(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Botão Urgente */}
+                  <div className="flex items-center gap-2 pt-1">
                     <button 
                       type="button"
                       onClick={() => setIsUrgent(!isUrgent)}
                       className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                        "flex items-center gap-2 px-3.5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer",
                         isUrgent 
-                          ? "bg-rose-100 text-rose-600 border border-rose-200" 
-                          : "bg-white text-slate-400 border border-slate-200"
+                          ? "bg-rose-600 text-white border-2 border-rose-700 shadow-sm" 
+                          : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
                       )}
                     >
-                      <AlertTriangle className={cn("w-3 h-3", isUrgent ? "text-rose-600" : "text-slate-400")} />
-                      Urgente
+                      <AlertTriangle className={cn("w-3.5 h-3.5", isUrgent ? "text-white" : "text-slate-400")} />
+                      {isUrgent ? "URGENTE ATIVADO" : "Marcar como Urgente"}
                     </button>
                     {isUrgent && (
-                      <span className="text-[9px] font-bold text-rose-500 uppercase animate-pulse">Marcar como prioridade</span>
+                      <span className="text-[10px] font-black text-rose-600 uppercase animate-pulse">
+                        Prioridade Alta
+                      </span>
                     )}
                   </div>
-                  <div className="flex justify-end gap-2">
+
+                  {/* Rodapé Form */}
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
                     <button 
                       type="button"
                       onClick={() => setShowAddForm(false)}
-                      className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:bg-slate-50 rounded-lg"
+                      className="px-4 py-2 text-xs font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-100 rounded-xl transition-colors"
                     >
                       Cancelar
                     </button>
                     <button 
                       type="submit"
                       disabled={loading || !newRequest.trim()}
-                      className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-50 shadow-md transition-all flex items-center gap-2"
                     >
-                      Solicitar
+                      {loading ? (
+                        <span>Salvando...</span>
+                      ) : (
+                        <>
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          <span>Solicitar Produto</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </motion.form>
@@ -744,7 +963,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                       onClick={async () => {
                         try {
                           const newUrgentVal = !req.urgente;
-                          await updateDoc(doc(db, getDataPath('purchaseRequests'), req.id!), {
+                          await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id!), {
                             urgente: newUrgentVal
                           });
                           await logAction('Edição', 'Pedido Compra', `Marcou pedido de "${req.produto}" como ${newUrgentVal ? 'URGENTE' : 'não urgente'}`, 'purchaseRequests', req.id!, { ...req, urgente: newUrgentVal });
