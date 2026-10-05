@@ -21,7 +21,7 @@ import {
   ChefHat
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
 import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
@@ -64,6 +64,56 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   const [showHistory, setShowHistory] = useState(true);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
   const [staffList, setStaffList] = useState<string[]>([]);
+
+  // Estado local com sincronização em tempo real e atualização otimista instantânea
+  const [localRequests, setLocalRequests] = useState<PurchaseRequest[]>(() => {
+    try {
+      const cached = localStorage.getItem(`app_cache_${getDataPath('purchaseRequests')}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return requests || [];
+  });
+
+  // Atualizar quando props mudarem sem perder dados locais
+  React.useEffect(() => {
+    if (requests && requests.length > 0) {
+      setLocalRequests(prev => {
+        const propMap = new Map(requests.map(r => [r.id, r]));
+        const localNew = prev.filter(r => r.id && !propMap.has(r.id));
+        return [...requests, ...localNew];
+      });
+    }
+  }, [requests]);
+
+  // Listener em tempo real do Firestore para pedidos de compra
+  React.useEffect(() => {
+    try {
+      const colRef = collection(db, getDataPath('purchaseRequests'));
+      const unsubscribe = onSnapshot(colRef, (snap) => {
+        const items: PurchaseRequest[] = [];
+        snap.forEach(docSnap => {
+          items.push({ ...docSnap.data(), id: docSnap.id } as PurchaseRequest);
+        });
+        if (items.length > 0) {
+          setLocalRequests(items);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(items));
+          } catch {}
+          window.dispatchEvent(new CustomEvent('purchase-requests-synced', { detail: items }));
+        }
+      }, (err) => {
+        console.warn('onSnapshot para purchaseRequests em modo cache:', err);
+      });
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Erro ao conectar onSnapshot para purchaseRequests:', err);
+    }
+  }, [userId]);
 
   // Carregar lista de colaboradores cadastrados
   React.useEffect(() => {
@@ -223,6 +273,21 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
       const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), record);
       
+      const newCreatedItem: PurchaseRequest = {
+        ...record,
+        id: docRef?.id || `req_${Date.now()}`
+      } as PurchaseRequest;
+
+      // Atualização otimista imediata na interface
+      setLocalRequests(prev => {
+        const next = [newCreatedItem, ...prev.filter(r => r.id !== newCreatedItem.id)];
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: newCreatedItem }));
+
       try {
         await logAction(
           'Criação', 
@@ -276,7 +341,16 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
   const handleDelete = async (id: string) => {
     try {
-      const existingReq = requests?.find(r => r.id === id);
+      const existingReq = localRequests?.find(r => r.id === id);
+      setLocalRequests(prev => {
+        const next = prev.filter(r => r.id !== id);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('purchase-requests-deleted', { detail: id }));
+
       await deleteDoc(doc(db, getDataPath('purchaseRequests'), id));
       await logAction('Exclusão', 'Pedido Compra', `Excluiu pedido de compra para "${existingReq?.produto || id}"`, 'purchaseRequests', id, existingReq || {});
     } catch (err) {
@@ -287,7 +361,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   const findLastUnitPriceForCategory = React.useCallback((category: string, excludeId?: string) => {
     if (!category || category === 'Desconsiderar') return null;
     
-    const matches = (requests || []).filter(r => 
+    const matches = (localRequests || []).filter(r => 
       r.categoriaEstoque === category && 
       (r.status === 'comprado' || r.status === 'recebido') &&
       r.valorUnitario !== undefined &&
@@ -308,7 +382,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
     });
 
     return sorted[0].valorUnitario;
-  }, [requests]);
+  }, [localRequests]);
 
   const openConfirmModal = (req: PurchaseRequest) => {
     const detected = req.categoriaEstoque || getMacroForProduct(req.produto) || '';
@@ -359,7 +433,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       // We store the quantitative part for calculations and string for display
       const requestRef = doc(db, getDataPath('purchaseRequests'), confirmModal.request.id!);
       const payloadUpdate = {
-        status: 'comprado',
+        status: 'comprado' as const,
         produto: confirmModal.produtoNome,
         quantidade: `${confirmModal.quantidadeNum} ${confirmModal.unidade}`,
         quantidadeNumerica: q,
@@ -372,6 +446,14 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         fornecedor: confirmModal.fornecedor
       };
       await safeUpdateDoc(requestRef, payloadUpdate);
+      setLocalRequests(prev => {
+        const next = prev.map(r => r.id === confirmModal.request!.id ? { ...r, ...payloadUpdate } : r);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...confirmModal.request, ...payloadUpdate } }));
       await logAction('Edição', 'Pedido Compra', `Marcou solicitacao de "${confirmModal.request.produto}" como comprado`, 'purchaseRequests', confirmModal.request.id!, { ...confirmModal.request, ...payloadUpdate });
 
       setConfirmModal({ ...confirmModal, show: false, request: null });
@@ -443,15 +525,24 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
       // 2. Atualizar o pedido para 'recebido'
       if (req.id) {
-        await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id), {
-          status: 'recebido',
+        const updateCakePayload = {
+          status: 'recebido' as const,
           dataRecebimento: format(new Date(), 'yyyy-MM-dd'),
           quantidadeRecebida: qtd,
           quantidadeProduzida: qtd,
           responsavelProducao: responsavel,
           destinoProducao: destino,
           observacao: `Bolo produzido internamente (${qtd} un enviadas para o ${destino === 'quiosque' ? 'Quiosque' : 'Estoque'}) por ${responsavel}`
+        };
+        await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id), updateCakePayload);
+        setLocalRequests(prev => {
+          const next = prev.map(r => r.id === req.id ? { ...r, ...updateCakePayload } : r);
+          try {
+            localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+          } catch {}
+          return next;
         });
+        window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, ...updateCakePayload } }));
       }
 
       // 3. Registrar Log de Auditoria
@@ -492,10 +583,18 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       
       const pathRequests = getDataPath('purchaseRequests');
       const updatedReqPayload = {
-        status: 'recebido',
+        status: 'recebido' as const,
         dataRecebimento: format(new Date(), 'yyyy-MM-dd')
       };
       await safeUpdateDoc(doc(db, pathRequests, req.id), updatedReqPayload);
+      setLocalRequests(prev => {
+        const next = prev.map(r => r.id === req.id ? { ...r, ...updatedReqPayload } : r);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, ...updatedReqPayload } }));
       await logAction('Edição', 'Pedido Compra', `Confirmou recebimento de "${req.produto}"`, 'purchaseRequests', req.id, { ...req, ...updatedReqPayload });
 
       const qtyToAdd = req.quantidadeNumerica || Number(req.quantidade?.split(' ')[0]) || 0;
@@ -601,22 +700,22 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   };
 
   const column1 = React.useMemo(() => {
-    return sortRequests((requests || []).filter(r => r.status === 'pendente'));
-  }, [requests]);
+    return sortRequests((localRequests || []).filter(r => r.status === 'pendente'));
+  }, [localRequests]);
 
   const column2 = React.useMemo(() => {
-    return sortReceivedRequests((requests || []).filter(r => r.status === 'comprado'));
-  }, [requests]);
+    return sortReceivedRequests((localRequests || []).filter(r => r.status === 'comprado'));
+  }, [localRequests]);
 
   const receivedRequestsHistory = React.useMemo(() => {
-    return (requests || [])
+    return (localRequests || [])
       .filter(r => r.status === 'recebido')
       .sort((a, b) => {
         const dateA = a.dataRecebimento || '';
         const dateB = b.dataRecebimento || '';
         return dateB.localeCompare(dateA);
       });
-  }, [requests]);
+  }, [localRequests]);
 
   // Grouping column2 by previsaoChegada
   const groupedColumn2 = React.useMemo(() => {
@@ -963,6 +1062,15 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                       onClick={async () => {
                         try {
                           const newUrgentVal = !req.urgente;
+                          setLocalRequests(prev => {
+                            const next = prev.map(r => r.id === req.id ? { ...r, urgente: newUrgentVal } : r);
+                            try {
+                              localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
+                            } catch {}
+                            return next;
+                          });
+                          window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, urgente: newUrgentVal } }));
+
                           await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id!), {
                             urgente: newUrgentVal
                           });

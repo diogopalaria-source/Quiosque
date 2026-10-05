@@ -264,6 +264,37 @@ export default function App() {
   const [alfaValidationResult, setAlfaValidationResult] = useState<any | null>(null);
   const [alfaValidationError, setAlfaValidationError] = useState<string | null>(null);
 
+  // Sync purchase requests across events with instant state update
+  useEffect(() => {
+    const handlePrUpdated = (e: any) => {
+      const item = e.detail;
+      if (item && item.id) {
+        setPurchaseRequestsData(prev => [item, ...prev.filter(p => p.id !== item.id)]);
+      }
+    };
+    const handlePrSynced = (e: any) => {
+      const items = e.detail;
+      if (Array.isArray(items)) {
+        setPurchaseRequestsData(items);
+      }
+    };
+    const handlePrDeleted = (e: any) => {
+      const id = e.detail;
+      if (id) {
+        setPurchaseRequestsData(prev => prev.filter(p => p.id !== id));
+      }
+    };
+
+    window.addEventListener('purchase-requests-updated', handlePrUpdated);
+    window.addEventListener('purchase-requests-synced', handlePrSynced);
+    window.addEventListener('purchase-requests-deleted', handlePrDeleted);
+    return () => {
+      window.removeEventListener('purchase-requests-updated', handlePrUpdated);
+      window.removeEventListener('purchase-requests-synced', handlePrSynced);
+      window.removeEventListener('purchase-requests-deleted', handlePrDeleted);
+    };
+  }, []);
+
   // Auth Listener
   useEffect(() => {
     const handleRouting = () => {
