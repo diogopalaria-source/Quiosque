@@ -222,7 +222,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         categoria: formData.categoria.trim() || 'Geral',
         local: formData.local,
         tipoContagem: formData.tipoContagem,
-        minimo: Number(formData.minimo) || 10,
+        minimo: isNaN(Number(formData.minimo)) ? 0 : Number(formData.minimo),
         unidadeMedida: formData.unidadeMedida.trim() || 'un'
       };
       if (hasBoxes) {
@@ -1318,7 +1318,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
                   >
                     <option value="unidade">Unidade Simples</option>
-                    <option value="embalagem_com_aberto">Pacote + Aberto (ex: fardo)</option>
+                    <option value="embalagem_com_aberto">Pacotes Fechados + Abertos em uso</option>
                     <option value="caixa_ou_avulso">Caixas + Avulso</option>
                     <option value="tem_bastante">Tem Bastante / Suficiente</option>
                   </select>
@@ -1345,7 +1345,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
                   />
                 </div>
-                {(formData.tipoContagem === 'caixa_ou_avulso' || formData.tipoContagem === 'embalagem_com_aberto') && (
+                {formData.tipoContagem === 'caixa_ou_avulso' && (
                   <>
                     <div>
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
