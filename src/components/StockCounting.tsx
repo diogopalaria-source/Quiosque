@@ -840,7 +840,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           abaixoMinimoEstimado++;
         }
       } else if (def.tipoContagem === 'embalagem_com_aberto') {
-        if (effectiveMin === 1) {
+        if (effectiveMin <= 1) {
           if (thisLocationVal === 0) {
             abaixoMinimoEstimado++;
           }
@@ -1025,8 +1025,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             qtdFormatada = def.produto.toLowerCase().includes('sorvete') ? '1 balde' : '1 cx';
           }
         } else if (def.tipoContagem === 'embalagem_com_aberto') {
-          if (effectiveMin === 1) {
-            // Regra explícita: "para os itens com 1 no estoque minimo... na sessão de fechados e aberto, só quando não tiver nenhum fechado, apenas o aberto em uso..."
+          if (effectiveMin <= 1) {
+            // Regra explícita: "para os itens com 0 ou 1 no estoque minimo... na sessão de fechados e aberto, só quando não tiver nenhum fechado, apenas o aberto em uso..."
             if (newLocationQty === 0) {
               precisaPedir = true;
               deficit = 1;

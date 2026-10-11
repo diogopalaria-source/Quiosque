@@ -662,64 +662,60 @@ export default function App() {
       }
       const quotaExhausted = localStorage.getItem('firestore_quota_exceeded') === 'true';
 
-      for (const { name, setter } of collections) {
+      // 1. Carregar do cache local para renderização instantânea para todas as coleções
+      collections.forEach(({ name, setter }) => {
         const path = `${dataPath}/${name}`;
         const cacheKey = `app_cache_${path}`;
-
-        // 1. Carregar do cache local para renderização instantânea sem gastar cota
-        let hasCache = false;
         try {
           const cached = localStorage.getItem(cacheKey);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               setter(parsed);
-              hasCache = true;
             }
           }
         } catch {}
+      });
 
-        // Se a cota já esgotou e temos cache, pula a chamada de rede para evitar erros e consumir cota
-        if (quotaExhausted && hasCache) {
-          continue;
-        }
+      if (quotaExhausted) return;
 
-        // 2. Buscar dados atualizados via getDocs
-        try {
-          const q = query(collection(db, path));
-          const snap = await getDocs(q);
-          const data = snap.docs.map(doc => {
-            const item = { ...doc.data(), id: doc.id } as any;
-            if (name === 'staffConsumption' || name === 'staffPayments') {
-              if (item.funcionario === 'Natan') {
-                item.funcionario = 'Nathan';
-              }
-            }
-            if (name === 'wasteRecords') {
-              if (item.responsavel === 'Natan') {
-                item.responsavel = 'Nathan';
-              }
-            }
-            return item;
-          });
-          setter(data);
+      // 2. Buscar dados atualizados em paralelo via getDocs para todas as coleções simultaneamente
+      await Promise.allSettled(
+        collections.map(async ({ name, setter }) => {
+          const path = `${dataPath}/${name}`;
+          const cacheKey = `app_cache_${path}`;
           try {
-            localStorage.setItem(cacheKey, JSON.stringify(data));
-          } catch {}
-        } catch (error: any) {
-          const errStr = error?.message || String(error);
-          if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
-            localStorage.setItem('firestore_quota_exceeded', 'true');
-            localStorage.setItem('firestore_quota_date', new Date().toDateString());
-            if (!hasCache) {
-              setSyncError(`Aviso: Cota diária gratuita do Firestore atingida temporariamente. O sistema está operando com dados locais em cache.`);
+            const q = query(collection(db, path));
+            const snap = await getDocs(q);
+            const data = snap.docs.map(doc => {
+              const item = { ...doc.data(), id: doc.id } as any;
+              if (name === 'staffConsumption' || name === 'staffPayments') {
+                if (item.funcionario === 'Natan') {
+                  item.funcionario = 'Nathan';
+                }
+              }
+              if (name === 'wasteRecords') {
+                if (item.responsavel === 'Natan') {
+                  item.responsavel = 'Nathan';
+                }
+              }
+              return item;
+            });
+            setter(data);
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(data));
+            } catch {}
+          } catch (error: any) {
+            const errStr = error?.message || String(error);
+            if (errStr.includes('Quota limit exceeded') || errStr.includes('resource-exhausted')) {
+              localStorage.setItem('firestore_quota_exceeded', 'true');
+              localStorage.setItem('firestore_quota_date', new Date().toDateString());
+            } else {
+              console.warn(`Error fetching ${name}:`, error);
             }
-          } else {
-            console.warn(`Error fetching ${name}:`, error);
-            handleFirestoreError(error, OperationType.LIST, path);
           }
-        }
-      }
+        })
+      );
     };
 
     loadAllCollections();

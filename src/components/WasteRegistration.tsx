@@ -1737,54 +1737,53 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
 
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     
-    // Summary box
+    // Summary boxes
     const periodConsumo = filteredRecords.filter(r => r.type === 'consumo').reduce((sum, r) => sum + r.amount, 0);
     const periodPago = filteredRecords.filter(r => r.type === 'pagamento').reduce((sum, r) => sum + Math.abs(r.amount), 0);
     const saldoAnterior = initialBalance;
+    const valorPendentePeriodo = periodConsumo - periodPago;
     const finalSaldo = saldoAnterior + periodConsumo - periodPago;
 
-    const hasFilter = !!pdfStartDate;
-    const boxHeight = hasFilter ? 43 : 35;
-
+    // Left side box (Period summary)
     doc.setFillColor(248, 250, 252); // slate-50
-    doc.roundedRect(135, finalY, 61, boxHeight, 3, 3, 'F');
+    doc.roundedRect(14, finalY, 88, 32, 3, 3, 'F');
     
-    let currentY = finalY + 10;
+    let leftY = finalY + 8;
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('TOTAL CONSUMO PERÍODO:', 18, leftY);
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`R$ ${periodConsumo.toFixed(2)}`, 98, leftY, { align: 'right' });
+    leftY += 8;
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('TOTAL PAGO PERÍODO:', 18, leftY);
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`R$ ${periodPago.toFixed(2)}`, 98, leftY, { align: 'right' });
+    leftY += 8;
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text('VALOR PENDENTE PERÍODO*:', 18, leftY);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`R$ ${valorPendentePeriodo.toFixed(2)}`, 98, leftY, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+
+    // Right side box (Saldo Devedor Total only)
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(124, finalY, 72, 20, 3, 3, 'F');
     
-    if (hasFilter) {
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text('SALDO ANTERIOR:', 140, currentY);
-      doc.setFontSize(10);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`R$ ${saldoAnterior.toFixed(2)}`, 190, currentY, { align: 'right' });
-      currentY += 8;
-    }
-
+    let rightY = finalY + 8;
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text('TOTAL CONSUMO:', 140, currentY);
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`R$ ${periodConsumo.toFixed(2)}`, 190, currentY, { align: 'right' });
-    currentY += 8;
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('TOTAL PAGO:', 140, currentY);
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text(`R$ ${periodPago.toFixed(2)}`, 190, currentY, { align: 'right' });
-    currentY += 5;
-
-    doc.setDrawColor(226, 232, 240);
-    doc.line(140, currentY, 190, currentY);
-    currentY += 7;
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text('SALDO DEVEDOR:', 140, currentY);
-    doc.setFontSize(10);
+    doc.text('SALDO DEVEDOR TOTAL**:', 130, rightY);
+    rightY += 7;
+    doc.setFontSize(11);
     
     if (finalSaldo > 0) {
       doc.setTextColor(225, 29, 72); // rose-600
@@ -1792,14 +1791,26 @@ export const WasteRegistration: React.FC<WasteRegistrationProps> = ({
       doc.setTextColor(5, 150, 105); // emerald-600
     }
     
-    doc.text(`R$ ${finalSaldo.toFixed(2)}`, 190, currentY, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(`R$ ${finalSaldo.toFixed(2)}`, 190, rightY, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
     
+    // Warning text
+    const warningY = Math.max(finalY + 40, 210);
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    const warningText1 = '* Não ocorrendo a quitação até o último dia do mês subsequente ao consumo, autorizo expressamente o respectivo desconto do valor pendente em folha de pagamento.';
+    doc.text(warningText1, 14, warningY, { maxWidth: 180 });
+
+    const warningText2 = '** Valor deverá ser quitado até o final de dezembro, não ocorrendo a quitação na data acordada, autorizo o desconto em folha. Caso ocorra o encerramento do contrato antes da data acordada, autorizo o débito na rescisão do contrato.';
+    doc.text(warningText2, 14, warningY + 11, { maxWidth: 180 });
+
     // Date and Signature footer
-    const footerY = Math.max(finalY + 60, 260); // Ensure it's near bottom but respects summary
-    doc.setFontSize(10);
+    const footerY = warningY + 28;
+    doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
     doc.text('DATA: _____________________', 14, footerY);
-    doc.text('ASSINATURA: _________________________________', 85, footerY);
+    doc.text('ASSINATURA: __________________________________________________', 80, footerY);
 
     doc.save(`Extrato_${employeeName ? employeeName : 'TODOS'}_${format(new Date(), 'yyyyMMdd')}.pdf`);
   };

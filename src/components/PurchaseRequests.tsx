@@ -100,13 +100,11 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         snap.forEach(docSnap => {
           items.push({ ...docSnap.data(), id: docSnap.id } as PurchaseRequest);
         });
-        if (items.length > 0) {
-          setLocalRequests(items);
-          try {
-            localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(items));
-          } catch {}
-          window.dispatchEvent(new CustomEvent('purchase-requests-synced', { detail: items }));
-        }
+        setLocalRequests(items);
+        try {
+          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(items));
+        } catch {}
+        window.dispatchEvent(new CustomEvent('purchase-requests-synced', { detail: items }));
       }, (err) => {
         console.warn('onSnapshot para purchaseRequests em modo cache:', err);
       });
