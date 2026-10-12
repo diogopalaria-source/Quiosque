@@ -28,7 +28,8 @@ import {
   ChevronRight,
   Pencil,
   Settings,
-  Trash2
+  Trash2,
+  Sliders
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -269,6 +270,43 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     } catch (err) {
       console.error('Erro ao excluir item do catálogo:', err);
       alert('Erro ao excluir item.');
+    }
+  };
+
+  const [isBulkEditing, setIsBulkEditing] = useState(false);
+  const [bulkMinimos, setBulkMinimos] = useState<Record<string, number>>({});
+
+  const handleSaveBulkMinimos = async () => {
+    try {
+      const updates = Object.entries(bulkMinimos);
+      if (updates.length === 0) {
+        setIsBulkEditing(false);
+        return;
+      }
+      
+      const batchPromises = updates.map(async ([itemId, newMin]) => {
+        const item = stockItems.find(p => p.id === itemId);
+        if (!item) return;
+        const updatedItem = { ...item, minimo: Number(newMin) };
+        await safeSetDoc(doc(db, getDataPath('stockCountConfig'), itemId), updatedItem, { merge: true });
+        return updatedItem;
+      });
+
+      const results = await Promise.all(batchPromises);
+      
+      setStockItems(prev => prev.map(p => {
+        const found = results.find(r => r && r.id === p.id);
+        return found ? found : p;
+      }));
+
+      await logAction('Edição', 'Catálogo Estoque', `Atualizou ${updates.length} estoques mínimos em lote`, getDataPath('stockCountConfig'), 'bulk', bulkMinimos);
+      
+      alert(`Estoques mínimos atualizados com sucesso (${updates.length} itens)!`);
+      setIsBulkEditing(false);
+      setBulkMinimos({});
+    } catch (err) {
+      console.error('Erro ao salvar em lote:', err);
+      alert('Erro ao salvar alterações em lote.');
     }
   };
 
@@ -1240,31 +1278,52 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             </div>
           </div>
 
+
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               {filteredCatalogItems.length} produto(s) encontrado(s)
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingCatalogItem(null);
-                setIsAddingItem(true);
-                setFormData({
-                  produto: '',
-                  categoria: 'Gelados & Doces',
-                  local: 'ambos',
-                  tipoContagem: 'unidade',
-                  minimo: 10,
-                  unidadeMedida: 'un',
-                  tamanhoCaixa: 12,
-                  rotuloEmbalagem: 'caixa'
-                });
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Adicionar Novo Produto</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isBulkEditing) {
+                    const initial: Record<string, number> = {};
+                    stockItems.forEach(i => { initial[i.id] = i.minimo; });
+                    setBulkMinimos(initial);
+                  }
+                  setIsBulkEditing(!isBulkEditing);
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5 cursor-pointer",
+                  isBulkEditing ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-slate-900 hover:bg-slate-800 text-white"
+                )}
+              >
+                <Sliders className="w-4 h-4" />
+                <span>{isBulkEditing ? 'Sair Edição em Lote' : 'Ajuste Rápido (Lote)'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCatalogItem(null);
+                  setIsAddingItem(true);
+                  setFormData({
+                    produto: '',
+                    categoria: 'Gelados & Doces',
+                    local: 'ambos',
+                    tipoContagem: 'unidade',
+                    minimo: 10,
+                    unidadeMedida: 'un',
+                    tamanhoCaixa: 12,
+                    rotuloEmbalagem: 'caixa'
+                  });
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Adicionar Novo Produto</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1417,35 +1476,53 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingCatalogItem(item);
-                    setIsAddingItem(false);
-                    setFormData({
-                      produto: item.produto,
-                      categoria: item.categoria,
-                      local: item.local,
-                      tipoContagem: item.tipoContagem,
-                      minimo: item.minimo,
-                      unidadeMedida: item.unidadeMedida || 'un',
-                      tamanhoCaixa: item.tamanhoCaixa || 12,
-                      rotuloEmbalagem: item.rotuloEmbalagem || 'caixa'
-                    });
-                  }}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                  title="Editar produto"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteCatalogItem(item.id, item.produto)}
-                  className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
-                  title="Excluir produto"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {isBulkEditing ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase text-slate-500">Novo Mínimo ({item.unidadeMedida}):</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkMinimos[item.id] !== undefined ? bulkMinimos[item.id] : item.minimo}
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        setBulkMinimos(prev => ({ ...prev, [item.id]: isNaN(val) ? 0 : val }));
+                      }}
+                      className="w-24 bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1.5 text-xs font-black text-slate-900 text-center focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingCatalogItem(item);
+                        setIsAddingItem(false);
+                        setFormData({
+                          produto: item.produto,
+                          categoria: item.categoria,
+                          local: item.local,
+                          tipoContagem: item.tipoContagem,
+                          minimo: item.minimo,
+                          unidadeMedida: item.unidadeMedida || 'un',
+                          tamanhoCaixa: item.tamanhoCaixa || 12,
+                          rotuloEmbalagem: item.rotuloEmbalagem || 'caixa'
+                        });
+                      }}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                      title="Editar produto"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCatalogItem(item.id, item.produto)}
+                      className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                      title="Excluir produto"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -1455,6 +1532,33 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             </div>
           )}
         </div>
+
+        {/* Floating Bulk Edit Save Bar */}
+        {isBulkEditing && (
+          <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-700">
+            <div>
+              <p className="text-xs font-bold text-slate-300">Modo de Edição em Lote Ativo</p>
+              <p className="text-[10px] text-slate-400">Modifique os estoques mínimos e clique em Salvar Alterações.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkEditing(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBulkMinimos}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Salvar Tudo em Lote</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
