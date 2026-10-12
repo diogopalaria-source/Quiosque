@@ -2023,9 +2023,9 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
               )}
-              {/* Linha Única: Nome do Produto e Badges à esquerda, Controles à direita */}
-              <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
-                <div className="min-w-0 flex-1">
+              {/* Layout Responsivo Otimizado para Celular */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
                       {item.produto}
@@ -2047,65 +2047,53 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex flex-col gap-0.5 mt-1 text-[11px] text-slate-500">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {item.tipoContagem !== 'tem_bastante' ? (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span>
-                            Estoque Mínimo: <strong className="text-slate-800 font-bold">{getEffectiveMin(item)} {item.unidadeMedida}</strong>
-                          </span>
-                          {isAdmin && (
-                            editingMinId === item.id ? (
-                              <div className="flex items-center gap-1 ml-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  value={editingMinVal}
-                                  onChange={e => setEditingMinVal(e.target.value)}
-                                  className="w-16 h-6 text-center text-xs font-bold bg-white border border-slate-300 rounded px-1 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
-                                  placeholder={String(getEffectiveMin(item))}
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveMinimo(item)}
-                                  className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
-                                >
-                                  Salvar
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => { setEditingMinId(null); setEditingMinVal(''); }}
-                                  className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
-                                >
-                                  X
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => { setEditingMinId(item.id); setEditingMinVal(String(getEffectiveMin(item))); }}
-                                className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer"
-                                title="Editar Estoque Mínimo (Admin)"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">
-                          Contagem Rápida: Tem bastante ou precisa pedir
-                        </span>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <span>
+                        Estoque Mínimo: <strong className="text-slate-800 font-bold">{getEffectiveMin(item)} {item.unidadeMedida || 'un'}</strong>
+                      </span>
+                      {isAdmin && (
+                        editingMinId === item.id ? (
+                          <div className="flex items-center gap-1 ml-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={editingMinVal}
+                              onChange={e => setEditingMinVal(e.target.value)}
+                              className="w-16 h-6 text-center text-xs font-bold bg-white border border-slate-300 rounded px-1 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                              placeholder={String(getEffectiveMin(item))}
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveMinimo(item)}
+                              className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                            >
+                              Salvar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingMinId(null); setEditingMinVal(''); }}
+                              className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
+                            >
+                              X
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setEditingMinId(item.id); setEditingMinVal(String(getEffectiveMin(item))); }}
+                            className="text-slate-400 hover:text-blue-600 transition-colors p-0.5 cursor-pointer"
+                            title="Editar Estoque Mínimo (Admin)"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )
                       )}
-
-
-
-
                     </div>
 
-                    {/* Total na contagem logo abaixo do estoque mínimo */}
+                    {/* Total na contagem logo abaixo */}
                     {item.tipoContagem !== 'tem_bastante' && (() => {
                       let tUnits = 0;
                       if (item.tipoContagem === 'unidade') {
@@ -2121,8 +2109,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       if (tUnits > 0 || currentCount.modificado || currentCount.temAberto) {
                         const uLabel = item.unidadeMedida === 'un' ? (tUnits === 1 ? 'unidade' : 'unidades') : item.unidadeMedida;
                         return (
-                          <span className="text-slate-600 font-medium">
-                            Total na contagem: <strong className="text-slate-900 font-bold">{tUnits} {uLabel}</strong>{currentCount.temAberto ? ' (+ 1 aberto em uso)' : ''}
+                          <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-md">
+                            Total: <strong className="font-bold">{tUnits} {uLabel}</strong>{currentCount.temAberto ? ' (+ 1 aberto)' : ''}
                           </span>
                         );
                       }
@@ -2131,9 +2119,10 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   </div>
                 </div>
 
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 justify-end w-full sm:w-auto">
                 {/* TIPO A: Unidade Simples */}
                 {item.tipoContagem === 'unidade' && (
-                  <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                     <button
                       type="button"
                       disabled={isCurrentLocationLocked && !isAdmin}
@@ -2150,7 +2139,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       value={currentCount.quantidade === 0 ? '' : currentCount.quantidade}
                       placeholder="0"
                       onChange={e => handleSimpleDirectInput(item.id, e.target.value)}
-                      className="w-16 h-10 text-center font-black text-slate-900 bg-white border border-slate-300 rounded-xl text-base focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                      className="w-20 h-10 text-center font-black text-slate-900 bg-white border border-slate-300 rounded-xl text-base focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                     />
                     <button
                       type="button"
@@ -2168,7 +2157,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
 
                 {/* TIPO B: Garrafa / Pote / Caixa Fechada + Checkbox "Aberto (em uso)" */}
                 {item.tipoContagem === 'embalagem_com_aberto' && (
-                  <div className="flex items-center gap-2 shrink-0 sm:self-center flex-wrap justify-end">
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
                     <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200">
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 px-1.5">
                         Fechados:
@@ -2177,7 +2166,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                         type="button"
                         disabled={isCurrentLocationLocked && !isAdmin}
                         onClick={() => handlePackageWithOpenChange(item.id, (currentCount.quantidade || 0) - 1, currentCount.temAberto)}
-                        className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 disabled:opacity-40 cursor-pointer"
+                        className="w-9 h-9 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 disabled:opacity-40 cursor-pointer"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
@@ -2188,13 +2177,13 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                         value={currentCount.quantidade === 0 ? '' : currentCount.quantidade}
                         placeholder="0"
                         onChange={e => handlePackageWithOpenChange(item.id, parseInt(e.target.value, 10) || 0, currentCount.temAberto)}
-                        className="w-12 h-8 text-center font-black text-slate-900 bg-white border border-slate-200 rounded-lg text-sm focus:outline-hidden disabled:opacity-50"
+                        className="w-14 h-9 text-center font-black text-slate-900 bg-white border border-slate-200 rounded-lg text-sm focus:outline-hidden disabled:opacity-50"
                       />
                       <button
                         type="button"
                         disabled={isCurrentLocationLocked && !isAdmin}
                         onClick={() => handlePackageWithOpenChange(item.id, (currentCount.quantidade || 0) + 1, currentCount.temAberto)}
-                        className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer"
+                        className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -2205,9 +2194,9 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       disabled={isCurrentLocationLocked && !isAdmin}
                       onClick={() => handlePackageWithOpenChange(item.id, currentCount.quantidade, !currentCount.temAberto)}
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border disabled:opacity-40 cursor-pointer",
+                        "flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all border disabled:opacity-40 cursor-pointer",
                         currentCount.temAberto 
-                          ? "bg-amber-100/80 text-amber-900 border-amber-300 shadow-xs" 
+                          ? "bg-amber-100/90 text-amber-900 border-amber-300 shadow-xs" 
                           : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
                       )}
                     >
@@ -2232,8 +2221,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   const avVal = currentCount.avulsos || 0;
 
                   return (
-                    <div className="flex items-center gap-2 shrink-0 sm:self-center flex-wrap justify-end">
-                      {/* Unidades Avulsas (Primeiro, à esquerda) */}
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                      {/* Unidades Avulsas */}
                       <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-2xs">
                         <span className="text-[10px] font-black uppercase text-slate-700 px-1">
                           Unidades:
@@ -2242,7 +2231,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                           type="button"
                           disabled={isCurrentLocationLocked && !isAdmin}
                           onClick={() => handleBoxAndUnitChange(item.id, cxVal, avVal - 1, item.tamanhoCaixa)}
-                          className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 disabled:opacity-40 cursor-pointer transition-colors"
+                          className="w-9 h-9 rounded-lg bg-white hover:bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 disabled:opacity-40 cursor-pointer transition-colors"
                           title="Diminuir Unidades"
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -2254,20 +2243,20 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                           value={avVal === 0 ? '' : avVal}
                           placeholder="0"
                           onChange={e => handleUnitDirectInput(item.id, cxVal, e.target.value, item.tamanhoCaixa)}
-                          className="w-12 h-8 text-center font-black text-slate-900 bg-white border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-slate-500 disabled:opacity-50"
+                          className="w-14 h-9 text-center font-black text-slate-900 bg-white border border-slate-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-slate-500 disabled:opacity-50"
                         />
                         <button
                           type="button"
                           disabled={isCurrentLocationLocked && !isAdmin}
                           onClick={() => handleBoxAndUnitChange(item.id, cxVal, avVal + 1, item.tamanhoCaixa)}
-                          className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                          className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-900 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
                           title="Aumentar Unidades"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      {/* Embalagens Fechadas (Sacos / Fardos / Caixas) (À direita) */}
+                      {/* Embalagens Fechadas */}
                       <div className="flex items-center gap-1.5 bg-blue-50/80 p-1 rounded-xl border border-blue-200 shadow-2xs">
                         <div className="flex flex-col px-1">
                           <span className="text-[10px] font-black uppercase text-blue-900 leading-tight">
@@ -2283,7 +2272,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                           type="button"
                           disabled={isCurrentLocationLocked && !isAdmin}
                           onClick={() => handleBoxAndUnitChange(item.id, cxVal - 1, avVal, item.tamanhoCaixa)}
-                          className="w-8 h-8 rounded-lg bg-white hover:bg-blue-100 text-blue-950 flex items-center justify-center border border-blue-200 disabled:opacity-40 cursor-pointer transition-colors"
+                          className="w-9 h-9 rounded-lg bg-white hover:bg-blue-100 text-blue-950 flex items-center justify-center border border-blue-200 disabled:opacity-40 cursor-pointer transition-colors"
                           title={`Diminuir ${rotuloPlural}`}
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -2295,13 +2284,13 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                           value={cxVal === 0 ? '' : cxVal}
                           placeholder="0"
                           onChange={e => handleBoxDirectInput(item.id, e.target.value, avVal, item.tamanhoCaixa)}
-                          className="w-12 h-8 text-center font-black text-slate-900 bg-white border border-blue-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                          className="w-14 h-9 text-center font-black text-slate-900 bg-white border border-blue-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                         />
                         <button
                           type="button"
                           disabled={isCurrentLocationLocked && !isAdmin}
                           onClick={() => handleBoxAndUnitChange(item.id, cxVal + 1, avVal, item.tamanhoCaixa)}
-                          className="w-8 h-8 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                          className="w-9 h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
                           title={`Aumentar ${rotuloPlural}`}
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -2311,21 +2300,21 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   );
                 })()}
 
-                {/* TIPO D: Itens Rápidos de Alto Volume (Sacos Kraft, Embalagens, Sorvete, etc) */}
+                {/* TIPO D: Itens Rápidos de Alto Volume */}
                 {item.tipoContagem === 'tem_bastante' && (
-                  <div className="flex items-center gap-2 shrink-0 sm:self-center">
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                     <button
                       type="button"
                       disabled={isCurrentLocationLocked && !isAdmin}
                       onClick={() => handleStatusBastanteChange(item.id, 'bastante')}
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border disabled:opacity-40 cursor-pointer",
+                        "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border disabled:opacity-40 cursor-pointer",
                         currentCount.statusBastante === 'bastante'
                           ? "bg-emerald-600 text-white border-emerald-700 shadow-xs ring-2 ring-emerald-200"
                           : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                       )}
                     >
-                      <ThumbsUp className="w-3.5 h-3.5" />
+                      <ThumbsUp className="w-4 h-4" />
                       <span>Tem bastante</span>
                     </button>
 
@@ -2334,17 +2323,18 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       disabled={isCurrentLocationLocked && !isAdmin}
                       onClick={() => handleStatusBastanteChange(item.id, 'pedir')}
                       className={cn(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all border disabled:opacity-40 cursor-pointer",
+                        "flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all border disabled:opacity-40 cursor-pointer",
                         currentCount.statusBastante === 'pedir'
                           ? "bg-rose-600 text-white border-rose-700 shadow-xs ring-2 ring-rose-200"
                           : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                       )}
                     >
-                      <ShoppingCart className="w-3.5 h-3.5" />
+                      <ShoppingCart className="w-4 h-4" />
                       <span>Precisa pedir</span>
                     </button>
                   </div>
                 )}
+                </div>
               </div>
             </div>
           );
