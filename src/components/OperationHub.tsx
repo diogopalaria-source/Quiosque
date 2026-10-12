@@ -13,7 +13,8 @@ import {
   QrCode,
   PackageCheck,
   Settings,
-  Users
+  Users,
+  BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WasteRegistration } from './WasteRegistration';
@@ -25,6 +26,7 @@ import { StaffManager } from './StaffManager';
 import { TemperatureControl } from './TemperatureControl';
 import { StockCountQrModal } from './StockCountQrModal';
 import { StockCounting } from './StockCounting';
+import { StockEvolutionAnalysis } from './StockEvolutionAnalysis';
 import { WasteRecord, StaffConsumption, StaffPayment, PurchaseRequest, Sale, StockItem, Recipe, Purchase, StaffDiscountOverride } from '../types';
 import { cn } from '../lib/utils';
 
@@ -44,7 +46,7 @@ interface OperationHubProps {
   selectedMonths?: string[];
 }
 
-type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub';
+type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub' | 'stock_evolution';
 
 export const OperationHub: React.FC<OperationHubProps> = ({
   userId,
@@ -108,6 +110,14 @@ export const OperationHub: React.FC<OperationHubProps> = ({
   ];
 
   const systemHubItems = [
+    {
+      id: 'stock_evolution',
+      title: 'Evolução da Contagem de Estoque',
+      description: 'Análise semana a semana (sáb a sex) da evolução das quantidades dos itens contados.',
+      icon: BarChart3,
+      color: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+      iconBg: 'bg-indigo-100'
+    },
     {
       id: 'stock_count',
       title: 'Catálogo de Contagem de Estoque',
@@ -384,6 +394,13 @@ export const OperationHub: React.FC<OperationHubProps> = ({
               userId={userId}
               userRole={userRole}
               onBack={() => setCurrentView('menu')}
+            />
+          )}
+
+          {currentView === 'stock_evolution' && userRole === 'admin' && (
+            <StockEvolutionAnalysis 
+              dataPath={userId}
+              onBack={() => setCurrentView('system_hub')}
             />
           )}
 

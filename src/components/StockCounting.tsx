@@ -90,6 +90,42 @@ const LOCAL_STORAGE_DRAFT_DEPOSITO = 'kiosk_count_draft_deposito_v5';
 // 5 dias em milissegundos: 5 * 24 * 60 * 60 * 1000 = 432.000.000 ms
 const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
+export function getStockWeekInfo(dateInput: Date | string = new Date()) {
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const daysSinceSaturday = (day - 6 + 7) % 7;
+  const startSat = new Date(d);
+  startSat.setDate(d.getDate() - daysSinceSaturday);
+
+  const endFri = new Date(startSat);
+  endFri.setDate(startSat.getDate() + 6);
+
+  const formatDdMm = (dt: Date) => `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`;
+  const formatYyyyMmDd = (dt: Date) => dt.toISOString().split('T')[0];
+
+  const startStr = formatDdMm(startSat);
+  const endStr = formatDdMm(endFri);
+  const monthStr = String(endFri.getMonth() + 1).padStart(2, '0');
+
+  const baseSat = new Date(2026, 9, 3); // Oct 3, 2026
+  const diffTime = startSat.getTime() - baseSat.getTime();
+  const diffWeeks = Math.round(diffTime / (7 * 24 * 60 * 60 * 1000));
+  const weekNum = Math.max(1, diffWeeks + 1);
+
+  const weekKey = formatYyyyMmDd(startSat);
+  const weekLabel = `Semana ${weekNum} (${startStr}-${endStr}/${monthStr})`;
+
+  return {
+    weekKey,
+    weekLabel,
+    startDate: formatYyyyMmDd(startSat),
+    endDate: formatYyyyMmDd(endFri),
+    sortOrder: startSat.getTime(),
+    weekNum
+  };
+}
+
 export const StockCounting: React.FC<StockCountingProps> = ({
   stockData,
   userId,
@@ -1134,6 +1170,40 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       }
 
       await batch.commit();
+
+      // Save stock count history per item for weekly evolution analysis
+      try {
+        const weekInfo = getStockWeekInfo(new Date());
+        for (const def of availableItemsForLocation) {
+          const c = counts[def.id];
+          const newLocationQty = c ? c.quantidade : 0;
+          const existingItem = stockData.find(s => 
+            s.produto.toLowerCase().trim() === def.produto.toLowerCase().trim() ||
+            (s.id && s.id === def.id)
+          );
+          const currentQuiosque = activeLocation === 'quiosque' ? newLocationQty : (existingItem?.estoqueQuiosque ?? 0);
+          const currentDeposito = activeLocation === 'deposito' ? newLocationQty : (existingItem?.estoqueDeposito ?? 0);
+          const totalEstoque = currentQuiosque + currentDeposito;
+
+          const historyDocId = `${def.id}_${weekInfo.weekKey}`;
+          await safeSetDoc(doc(db, getDataPath('stockCountHistory'), historyDocId), {
+            productId: def.id,
+            productName: def.produto,
+            category: def.categoriaQuiosque || def.categoria || 'Geral',
+            weekKey: weekInfo.weekKey,
+            weekLabel: weekInfo.weekLabel,
+            startDate: weekInfo.startDate,
+            endDate: weekInfo.endDate,
+            quantity: totalEstoque,
+            quiosqueQty: currentQuiosque,
+            depositoQty: currentDeposito,
+            responsavel: responsavelName.trim(),
+            timestamp: serverTimestamp()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error('Error saving stock count history:', err);
+      }
 
       if (purchaseRequestsToCreate.length > 0) {
         for (const req of purchaseRequestsToCreate) {
