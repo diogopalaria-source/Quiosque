@@ -10,12 +10,16 @@ import {
   RefreshCw,
   TrendingUp,
   CheckCircle2,
-  HelpCircle
+  HelpCircle,
+  Edit3,
+  X,
+  Save
 } from 'lucide-react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, doc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getDataPath, cn } from '../lib/utils';
-import { SearchableSelect } from './SearchableSelect';
+import { safeSetDoc } from '../lib/firestoreUtils';
+import { getStockWeekInfo } from './StockCounting';
 
 interface StockEvolutionAnalysisProps {
   dataPath: string;
@@ -47,12 +51,22 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [refreshing, setRefreshing] = useState(false);
 
+  // Edit / Calibration modal state
+  const [editingProduct, setEditingProduct] = useState<{
+    productName: string;
+    category: string;
+    productId: string;
+    weeks: Record<string, { quantity: number; quiosqueQty: number; depositoQty: number }>;
+  } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editSuccessMessage, setEditSuccessMessage] = useState(false);
+
   const fetchHistory = async () => {
     setRefreshing(true);
     try {
       const loadedMap = new Map<string, StockHistoryItem>();
 
-      // Fetch from shared path
+      // 1. Fetch history from shared and dev paths
       try {
         const qShared = query(collection(db, 'users/shared_franquia_data/stockCountHistory'));
         const snapShared = await getDocs(qShared);
@@ -65,7 +79,6 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         console.error('Error fetching shared history:', e);
       }
 
-      // Fetch from dev path as well
       try {
         const qDev = query(collection(db, 'users/dev_qa_franquia_data/stockCountHistory'));
         const snapDev = await getDocs(qDev);
@@ -80,9 +93,73 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         console.error('Error fetching dev history:', e);
       }
 
-      let loaded = Array.from(loadedMap.values());
+      // 2. Fetch current real stock items from DB to ensure all products (including bulk/large quantities) appear immediately
+      const currentWeekInfo = getStockWeekInfo(new Date());
+      try {
+        const stockSnap = await getDocs(collection(db, getDataPath('stock')));
+        const configSnap = await getDocs(collection(db, getDataPath('stockCountConfig')));
 
-      setHistoryItems(loaded);
+        const currentStockMap = new Map<string, { id: string; productName: string; category: string; total: number; quiosque: number; deposito: number }>();
+
+        stockSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          const prodName = d.produto || d.productName;
+          if (prodName) {
+            const qQuiosque = d.estoqueQuiosque ?? d.estoqueQuiosqueAtual ?? 0;
+            const qDeposito = d.estoqueDeposito ?? d.estoqueDepositoAtual ?? 0;
+            const total = d.estoqueAtual ?? (qQuiosque + qDeposito);
+            currentStockMap.set(prodName.toLowerCase().trim(), {
+              id: docSnap.id,
+              productName: prodName,
+              category: d.categoria || d.categoriaQuiosque || 'Geral',
+              total,
+              quiosque: qQuiosque,
+              deposito: qDeposito
+            });
+          }
+        });
+
+        configSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          const prodName = d.produto;
+          if (prodName && !currentStockMap.has(prodName.toLowerCase().trim())) {
+            currentStockMap.set(prodName.toLowerCase().trim(), {
+              id: docSnap.id,
+              productName: prodName,
+              category: d.categoriaQuiosque || d.categoria || 'Geral',
+              total: (d.estoqueQuiosqueInicial || 0) + (d.estoqueDepositoInicial || 0),
+              quiosque: d.estoqueQuiosqueInicial || 0,
+              deposito: d.estoqueDepositoInicial || 0
+            });
+          }
+        });
+
+        // Ensure current week has entries for all real stock items if not already present
+        for (const [_, item] of currentStockMap) {
+          const historyDocId = `${item.id}_${currentWeekInfo.weekKey}`;
+          if (!loadedMap.has(historyDocId)) {
+            const newItem: StockHistoryItem = {
+              id: historyDocId,
+              productId: item.id,
+              productName: item.productName,
+              category: item.category,
+              weekKey: currentWeekInfo.weekKey,
+              weekLabel: currentWeekInfo.weekLabel,
+              startDate: currentWeekInfo.startDate,
+              endDate: currentWeekInfo.endDate,
+              quantity: item.total,
+              quiosqueQty: item.quiosque,
+              depositoQty: item.deposito,
+              timestamp: new Date()
+            };
+            loadedMap.set(historyDocId, newItem);
+          }
+        }
+      } catch (e) {
+        console.error('Error merging current stock into history:', e);
+      }
+
+      setHistoryItems(Array.from(loadedMap.values()));
     } catch (err) {
       console.error('Error fetching stock history:', err);
     } finally {
@@ -119,13 +196,14 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
       }
     });
 
-    // Ensure Semana 1 (2026-10-03) is always present if not already
-    if (!weekMap.has('2026-10-03')) {
-      weekMap.set('2026-10-03', {
-        weekKey: '2026-10-03',
-        weekLabel: 'Semana 1 (03-09/10)',
-        startDate: '2026-10-03',
-        endDate: '2026-10-09'
+    // Ensure current week is always present
+    const currentWeekInfo = getStockWeekInfo(new Date());
+    if (!weekMap.has(currentWeekInfo.weekKey)) {
+      weekMap.set(currentWeekInfo.weekKey, {
+        weekKey: currentWeekInfo.weekKey,
+        weekLabel: currentWeekInfo.weekLabel,
+        startDate: currentWeekInfo.startDate,
+        endDate: currentWeekInfo.endDate
       });
     }
 
@@ -134,7 +212,7 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
 
   // Group items by product name
   const productEvolutionMap = useMemo(() => {
-    const map = new Map<string, { productName: string; category: string; weeks: Record<string, number> }>();
+    const map = new Map<string, { productName: string; category: string; productId: string; weeks: Record<string, { quantity: number; quiosqueQty?: number; depositoQty?: number }> }>();
 
     historyItems.forEach(item => {
       const prodName = item.productName || 'Produto Desconhecido';
@@ -143,15 +221,23 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         map.set(prodName, {
           productName: prodName,
           category: cat,
+          productId: item.productId || prodName.toLowerCase().replace(/\s+/g, '_'),
           weeks: {}
         });
       }
       const prodEntry = map.get(prodName)!;
       if (item.weekKey) {
-        prodEntry.weeks[item.weekKey] = item.quantity ?? 0;
+        prodEntry.weeks[item.weekKey] = {
+          quantity: item.quantity ?? 0,
+          quiosqueQty: item.quiosqueQty,
+          depositoQty: item.depositoQty
+        };
       }
       if (cat && cat !== 'Geral') {
         prodEntry.category = cat;
+      }
+      if (item.productId && !prodEntry.productId) {
+        prodEntry.productId = item.productId;
       }
     });
 
@@ -167,6 +253,62 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
       return matchSearch && matchCat;
     }).sort((a, b) => a.productName.localeCompare(b.productName, 'pt-BR', { sensitivity: 'base' }));
   }, [productEvolutionMap, searchTerm, selectedCategory]);
+
+  const handleOpenEditModal = (product: { productName: string; category: string; productId: string; weeks: Record<string, { quantity: number; quiosqueQty?: number; depositoQty?: number }> }) => {
+    const initialWeeksData: Record<string, { quantity: number; quiosqueQty: number; depositoQty: number }> = {};
+    weeksList.forEach(w => {
+      const existing = product.weeks[w.weekKey];
+      initialWeeksData[w.weekKey] = {
+        quantity: existing?.quantity ?? 0,
+        quiosqueQty: existing?.quiosqueQty ?? 0,
+        depositoQty: existing?.depositoQty ?? 0
+      };
+    });
+
+    setEditingProduct({
+      productName: product.productName,
+      category: product.category,
+      productId: product.productId,
+      weeks: initialWeeksData
+    });
+  };
+
+  const handleSaveEditModal = async () => {
+    if (!editingProduct) return;
+    setSavingEdit(true);
+    try {
+      for (const w of weeksList) {
+        const weekData = editingProduct.weeks[w.weekKey];
+        if (weekData) {
+          const historyDocId = `${editingProduct.productId}_${w.weekKey}`;
+          await safeSetDoc(doc(db, getDataPath('stockCountHistory'), historyDocId), {
+            productId: editingProduct.productId,
+            productName: editingProduct.productName,
+            category: editingProduct.category,
+            weekKey: w.weekKey,
+            weekLabel: w.weekLabel,
+            startDate: w.startDate,
+            endDate: w.endDate,
+            quantity: Number(weekData.quantity) || 0,
+            quiosqueQty: Number(weekData.quiosqueQty) || 0,
+            depositoQty: Number(weekData.depositoQty) || 0,
+            responsavel: 'Calibrado Manualmente',
+            timestamp: new Date()
+          }, { merge: true });
+        }
+      }
+
+      setEditSuccessMessage(true);
+      await fetchHistory();
+      setEditingProduct(null);
+      setTimeout(() => setEditSuccessMessage(false), 5000);
+    } catch (err) {
+      console.error('Error saving stock evolution edit:', err);
+      alert('Erro ao salvar as alterações da contagem.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -204,6 +346,15 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         </div>
       </div>
 
+      {editSuccessMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-6 py-4 rounded-2xl font-bold text-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>Contagens semanais atualizadas e calibradas com sucesso!</span>
+          </div>
+        </div>
+      )}
+
       {/* Filters Bar */}
       <div className="bg-white p-5 rounded-[2rem] border border-slate-200/80 shadow-xs grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Search */}
@@ -238,7 +389,7 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
           <div>
             <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Evolução Semanal de Estoque</h3>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-              Contagens semanais realizadas entre sábado e sexta-feira
+              Exibe o estoque atual como contagem desta semana e permite calibrar valores por semana
             </p>
           </div>
           <div className="px-3 py-1.5 bg-slate-100 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest">
@@ -270,6 +421,7 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
                       <div className="text-[9px] font-bold text-indigo-500 tracking-normal mt-0.5">{w.weekLabel.replace(/^[^\(]+\(/, '(')}</div>
                     </th>
                   ))}
+                  <th className="py-4 px-4 text-center min-w-[100px]">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-bold text-slate-700">
@@ -284,20 +436,37 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
                       </span>
                     </td>
                     {weeksList.map(w => {
-                      const qty = p.weeks[w.weekKey];
+                      const weekEntry = p.weeks[w.weekKey];
+                      const qty = weekEntry?.quantity;
                       const hasCount = qty !== undefined;
                       return (
                         <td key={w.weekKey} className="py-4 px-4 text-center border-l border-slate-100">
                           {hasCount ? (
-                            <span className="inline-flex items-center justify-center px-3 py-1 bg-emerald-50 text-emerald-800 rounded-xl font-black text-xs border border-emerald-200">
-                              {qty}
-                            </span>
+                            <div className="flex flex-col items-center justify-center">
+                              <span className="inline-flex items-center justify-center px-3 py-1 bg-emerald-50 text-emerald-800 rounded-xl font-black text-xs border border-emerald-200">
+                                {qty}
+                              </span>
+                              {(weekEntry?.quiosqueQty !== undefined || weekEntry?.depositoQty !== undefined) && (
+                                <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                  Q: {weekEntry.quiosqueQty ?? 0} | D: {weekEntry.depositoQty ?? 0}
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-slate-300 font-normal">—</span>
                           )}
                         </td>
                       );
                     })}
+                    <td className="py-4 px-4 text-center">
+                      <button
+                        onClick={() => handleOpenEditModal(p)}
+                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border border-indigo-200 inline-flex items-center gap-1.5"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Ajustar</span>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -313,10 +482,130 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         <div className="space-y-1">
           <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Sobre o Ciclo de Contagem Semanal</h4>
           <p className="text-xs font-bold text-indigo-900/80 leading-relaxed uppercase">
-            As contagens ocorrem semanalmente entre sábado e sexta-feira (com foco nas segundas e terças-feiras). Cada nova contagem realizada no módulo de Contagem de Estoque alimenta automaticamente a respectiva coluna da semana correspondente.
+            O estoque atual é trazido automaticamente como contagem da semana atual. A partir de agora, cada nova contagem realizada pelos atendentes via QR Code alimenta automaticamente a respectiva semana. Você também pode clicar em "Ajustar" para calibrar manualmente qualquer valor.
           </p>
         </div>
       </div>
+
+      {/* Edit / Calibration Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Ajustar Contagens Semanais</h3>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{editingProduct.productName} ({editingProduct.category})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingProduct(null)}
+                className="p-2 bg-white hover:bg-slate-200 text-slate-600 rounded-xl transition-all border border-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+              <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                Insira as quantidades totais, quiosque e depósito para cada semana que deseja calibrar:
+              </p>
+
+              <div className="space-y-4">
+                {weeksList.map(w => {
+                  const weekData = editingProduct.weeks[w.weekKey] || { quantity: 0, quiosqueQty: 0, depositoQty: 0 };
+                  return (
+                    <div key={w.weekKey} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                      <div className="font-black text-indigo-900 text-xs uppercase tracking-wider">
+                        {w.weekLabel}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Total Geral</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={weekData.quantity}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setEditingProduct({
+                                ...editingProduct,
+                                weeks: {
+                                  ...editingProduct.weeks,
+                                  [w.weekKey]: { ...weekData, quantity: val }
+                                }
+                              });
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Quiosque</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={weekData.quiosqueQty}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setEditingProduct({
+                                ...editingProduct,
+                                weeks: {
+                                  ...editingProduct.weeks,
+                                  [w.weekKey]: { ...weekData, quiosqueQty: val }
+                                }
+                              });
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-slate-800"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Depósito</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={weekData.depositoQty}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setEditingProduct({
+                                ...editingProduct,
+                                weeks: {
+                                  ...editingProduct.weeks,
+                                  [w.weekKey]: { ...weekData, depositoQty: val }
+                                }
+                              });
+                            }}
+                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50">
+              <button
+                onClick={() => setEditingProduct(null)}
+                className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-black text-xs uppercase tracking-wider transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEditModal}
+                disabled={savingEdit}
+                className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-md disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span>{savingEdit ? 'Salvando...' : 'Salvar Alterações'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

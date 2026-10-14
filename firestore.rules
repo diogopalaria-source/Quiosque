@@ -262,6 +262,11 @@ service cloud.firestore {
         allow write: if true;
       }
 
+      match /stockCountHistory/{id} {
+        allow read: if true;
+        allow write: if true;
+      }
+
       match /stockMinimumOverrides/{id} {
         allow read: if true;
         allow write: if true;
