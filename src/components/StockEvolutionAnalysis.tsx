@@ -64,15 +64,43 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
   const fetchHistory = async () => {
     setRefreshing(true);
     try {
+      // 1. Fetch official stock counting catalog (stockCountConfig) to know which products belong to the official list
+      const officialCatalogSet = new Set<string>();
+      const officialCatalogMap = new Map<string, { id: string; productName: string; category: string }>();
+      
+      try {
+        const configSnap = await getDocs(collection(db, getDataPath('stockCountConfig')));
+        configSnap.forEach(docSnap => {
+          const d = docSnap.data();
+          const prodName = d.produto || d.productName;
+          if (prodName) {
+            const normalized = prodName.toLowerCase().trim();
+            officialCatalogSet.add(normalized);
+            officialCatalogMap.set(normalized, {
+              id: docSnap.id,
+              productName: prodName,
+              category: d.categoria || d.categoriaQuiosque || d.categoriaEstoque || 'Geral'
+            });
+          }
+        });
+      } catch (e) {
+        console.error('Error fetching stockCountConfig:', e);
+      }
+
       const loadedMap = new Map<string, StockHistoryItem>();
 
-      // 1. Fetch history from shared and dev paths
+      // 2. Fetch history from shared and dev paths (QR code counts)
       try {
         const qShared = query(collection(db, 'users/shared_franquia_data/stockCountHistory'));
         const snapShared = await getDocs(qShared);
         if (!snapShared.empty) {
           snapShared.forEach(docSnap => {
-            loadedMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as StockHistoryItem);
+            const data = docSnap.data() as StockHistoryItem;
+            const prodName = (data.productName || '').toLowerCase().trim();
+            // ONLY consider items that are in the official stock counting catalog
+            if (prodName && (officialCatalogSet.size === 0 || officialCatalogSet.has(prodName))) {
+              loadedMap.set(docSnap.id, { id: docSnap.id, ...data });
+            }
           });
         }
       } catch (e) {
@@ -85,7 +113,11 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         if (!snapDev.empty) {
           snapDev.forEach(docSnap => {
             if (!loadedMap.has(docSnap.id)) {
-              loadedMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as StockHistoryItem);
+              const data = docSnap.data() as StockHistoryItem;
+              const prodName = (data.productName || '').toLowerCase().trim();
+              if (prodName && (officialCatalogSet.size === 0 || officialCatalogSet.has(prodName))) {
+                loadedMap.set(docSnap.id, { id: docSnap.id, ...data });
+              }
             }
           });
         }
@@ -93,70 +125,47 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         console.error('Error fetching dev history:', e);
       }
 
-      // 2. Fetch current real stock items from DB to ensure all products (including bulk/large quantities) appear immediately
+      // 3. For official catalog items that don't have a history entry for the current week, initialize with current stock
       const currentWeekInfo = getStockWeekInfo(new Date());
       try {
         const stockSnap = await getDocs(collection(db, getDataPath('stock')));
-        const configSnap = await getDocs(collection(db, getDataPath('stockCountConfig')));
-
-        const currentStockMap = new Map<string, { id: string; productName: string; category: string; total: number; quiosque: number; deposito: number }>();
+        const currentStockMap = new Map<string, { total: number; quiosque: number; deposito: number }>();
 
         stockSnap.forEach(docSnap => {
           const d = docSnap.data();
-          const prodName = d.produto || d.productName;
-          if (prodName) {
+          const prodName = (d.produto || d.productName || '').toLowerCase().trim();
+          if (prodName && officialCatalogSet.has(prodName)) {
             const qQuiosque = d.estoqueQuiosque ?? d.estoqueQuiosqueAtual ?? 0;
             const qDeposito = d.estoqueDeposito ?? d.estoqueDepositoAtual ?? 0;
             const total = d.estoqueAtual ?? (qQuiosque + qDeposito);
-            currentStockMap.set(prodName.toLowerCase().trim(), {
-              id: docSnap.id,
-              productName: prodName,
-              category: d.categoria || d.categoriaQuiosque || 'Geral',
-              total,
-              quiosque: qQuiosque,
-              deposito: qDeposito
-            });
+            currentStockMap.set(prodName, { total, quiosque: qQuiosque, deposito: qDeposito });
           }
         });
 
-        configSnap.forEach(docSnap => {
-          const d = docSnap.data();
-          const prodName = d.produto;
-          if (prodName && !currentStockMap.has(prodName.toLowerCase().trim())) {
-            currentStockMap.set(prodName.toLowerCase().trim(), {
-              id: docSnap.id,
-              productName: prodName,
-              category: d.categoriaQuiosque || d.categoria || 'Geral',
-              total: (d.estoqueQuiosqueInicial || 0) + (d.estoqueDepositoInicial || 0),
-              quiosque: d.estoqueQuiosqueInicial || 0,
-              deposito: d.estoqueDepositoInicial || 0
-            });
-          }
-        });
-
-        // Ensure current week has entries for all real stock items if not already present
-        for (const [_, item] of currentStockMap) {
-          const historyDocId = `${item.id}_${currentWeekInfo.weekKey}`;
+        // Ensure current week has entries for all official catalog items
+        for (const [normName, catItem] of officialCatalogMap) {
+          const historyDocId = `${catItem.id}_${currentWeekInfo.weekKey}`;
           if (!loadedMap.has(historyDocId)) {
+            const stockInfo = currentStockMap.get(normName) || { total: 0, quiosque: 0, deposito: 0 };
             const newItem: StockHistoryItem = {
               id: historyDocId,
-              productId: item.id,
-              productName: item.productName,
-              category: item.category,
+              productId: catItem.id,
+              productName: catItem.productName,
+              category: catItem.category,
               weekKey: currentWeekInfo.weekKey,
               weekLabel: currentWeekInfo.weekLabel,
               startDate: currentWeekInfo.startDate,
               endDate: currentWeekInfo.endDate,
-              quantity: item.total,
-              quiosqueQty: item.quiosque,
-              depositoQty: item.deposito,
+              quantity: stockInfo.total,
+              quiosqueQty: stockInfo.quiosque,
+              depositoQty: stockInfo.deposito,
               timestamp: new Date()
             };
             loadedMap.set(historyDocId, newItem);
           }
         }
       } catch (e) {
-        console.error('Error merging current stock into history:', e);
+        console.error('Error merging current stock into official catalog history:', e);
       }
 
       setHistoryItems(Array.from(loadedMap.values()));
@@ -389,7 +398,7 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
           <div>
             <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">Evolução Semanal de Estoque</h3>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-0.5">
-              Exibe o estoque atual como contagem desta semana e permite calibrar valores por semana
+              Exibe apenas os produtos oficiais da listagem de contagem de estoque
             </p>
           </div>
           <div className="px-3 py-1.5 bg-slate-100 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest">
@@ -482,7 +491,7 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
         <div className="space-y-1">
           <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Sobre o Ciclo de Contagem Semanal</h4>
           <p className="text-xs font-bold text-indigo-900/80 leading-relaxed uppercase">
-            O estoque atual é trazido automaticamente como contagem da semana atual. A partir de agora, cada nova contagem realizada pelos atendentes via QR Code alimenta automaticamente a respectiva semana. Você também pode clicar em "Ajustar" para calibrar manualmente qualquer valor.
+            Apenas produtos pertencentes à listagem oficial de contagem de estoque são exibidos. As contagens reais realizadas pelos atendentes via QR Code alimentam as semanas, e você pode calibrar qualquer valor usando o botão "Ajustar".
           </p>
         </div>
       </div>
