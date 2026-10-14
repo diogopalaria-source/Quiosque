@@ -1209,13 +1209,21 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           const depositoQty = activeLocation === 'deposito' && c 
             ? c.quantidade 
             : (matchingDb?.estoqueDeposito ?? 0);
-          const totalEstoque = quiosqueQty + depositoQty;
+          const temAberto = activeLocation === 'quiosque' && c 
+            ? (c.temAberto ?? false) 
+            : (matchingDb?.temAberto ?? false);
+
+          let totalEstoque = quiosqueQty + depositoQty;
+          if (def.tipoContagem === 'embalagem_com_aberto' && temAberto) {
+            totalEstoque += 1;
+          }
 
           const historyDocId = `${def.id}_${weekInfo.weekKey}`;
           await safeSetDoc(doc(db, getDataPath('stockCountHistory'), historyDocId), {
             productId: def.id,
             productName: def.produto,
             category: def.categoriaQuiosque || def.categoria || 'Geral',
+            tipoContagem: def.tipoContagem,
             weekKey: weekInfo.weekKey,
             weekLabel: weekInfo.weekLabel,
             startDate: weekInfo.startDate,
@@ -1223,6 +1231,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             quantity: totalEstoque,
             quiosqueQty: quiosqueQty,
             depositoQty: depositoQty,
+            temAberto: temAberto,
             responsavel: responsavelName.trim(),
             timestamp: serverTimestamp()
           }, { merge: true });
