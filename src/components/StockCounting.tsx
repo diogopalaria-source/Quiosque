@@ -149,6 +149,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
   const [formData, setFormData] = useState({
     produto: '',
     categoria: 'Gelados & Doces',
+    categoriaQuiosque: 'Expositor',
+    categoriaEstoque: 'Insumos',
     local: 'ambos' as CountLocation,
     tipoContagem: 'unidade' as StockCountType,
     minimo: 10,
@@ -257,6 +259,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         id,
         produto: formData.produto.trim(),
         categoria: formData.categoria.trim() || 'Geral',
+        categoriaQuiosque: (formData.local === 'quiosque' || formData.local === 'ambos') ? (formData.categoriaQuiosque?.trim() || formData.categoria.trim() || 'Geral') : undefined,
+        categoriaEstoque: (formData.local === 'deposito' || formData.local === 'estoque' || formData.local === 'ambos') ? (formData.categoriaEstoque?.trim() || formData.categoria.trim() || 'Geral') : undefined,
         local: formData.local,
         tipoContagem: formData.tipoContagem,
         minimo: isNaN(Number(formData.minimo)) ? 0 : Number(formData.minimo),
@@ -284,6 +288,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       setFormData({
         produto: '',
         categoria: 'Gelados & Doces',
+        categoriaQuiosque: 'Expositor',
+        categoriaEstoque: 'Insumos',
         local: 'ambos',
         tipoContagem: 'unidade',
         minimo: 10,
@@ -555,11 +561,11 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       .filter(item => {
         const loc = (item.local || '').toLowerCase().trim();
         if (activeLocation === 'quiosque') {
-          return loc === 'quiosque' || loc === 'ambos';
+          return (loc === 'quiosque' || loc === 'ambos') && !!(item.categoriaQuiosque || item.categoria);
         }
         if (activeLocation === 'deposito') {
           if (loc === 'quiosque') return false;
-          return (loc === 'deposito' || loc === 'estoque' || loc === 'ambos') && !!(item.categoriaEstoque && item.categoriaEstoque.trim());
+          return (loc === 'deposito' || loc === 'estoque' || loc === 'ambos') && !!(item.categoriaEstoque || item.categoria);
         }
         return false;
       })
@@ -570,7 +576,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
   const quiosqueItemsCount = useMemo(() => {
     return stockItems.filter(item => {
       const loc = (item.local || '').toLowerCase().trim();
-      return loc === 'quiosque' || loc === 'ambos';
+      return (loc === 'quiosque' || loc === 'ambos') && !!(item.categoriaQuiosque || item.categoria);
     }).length;
   }, [stockItems]);
 
@@ -578,21 +584,21 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     return stockItems.filter(item => {
       const loc = (item.local || '').toLowerCase().trim();
       if (loc === 'quiosque') return false;
-      return (loc === 'deposito' || loc === 'estoque' || loc === 'ambos') && !!(item.categoriaEstoque && item.categoriaEstoque.trim());
+      return (loc === 'deposito' || loc === 'estoque' || loc === 'ambos') && !!(item.categoriaEstoque || item.categoria);
     }).length;
   }, [stockItems]);
 
   // =========================================================================
   // REQUISITO ESTRITO: CATEGORIAS POR LOCAL
-  // Quiosque: usa categoriaQuiosque ("Freezer", "Expositor", "Embaixo Air Fryer", "Embaixo do Forno", "Gavetão", "Chá", "Embaixo da Pia", "Bebidas", "Delivery", "Outros")
-  // Estoque: usa categoriaEstoque ("Café", "Insumos", "Doces", "Sachês", "Outros", "Uso Pessoal", "Descartáveis", "Limpeza", "Chá", "Bebidas", "Delivery")
+  // Quiosque: usa categoriaQuiosque / categoria ("Freezer", "Expositor", etc.)
+  // Estoque: usa categoriaEstoque / categoria ("Café", "Insumos", "Limpeza", etc.)
   // =========================================================================
   const categories = useMemo(() => {
     const cats = new Set<string>();
     availableItemsForLocation.forEach(item => {
       const catName = activeLocation === 'quiosque' 
-        ? item.categoriaQuiosque 
-        : item.categoriaEstoque;
+        ? (item.categoriaQuiosque || item.categoria)
+        : (item.categoriaEstoque || item.categoria);
       if (catName && catName.trim() && catName.trim() !== '-') {
         cats.add(catName.trim());
       }
@@ -678,7 +684,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       setCounts(initial);
     };
     loadDrafts();
-  }, [activeLocation, stockData, stockItems]);
+  }, [activeLocation]); // Depend only on activeLocation so stockData updates don't reset in-progress counts
 
   // Salvar rascunho local e na nuvem toda vez que mudar
   const updateCountItem = (id: string, updater: (prev: ItemLocalCount) => ItemLocalCount) => {
@@ -692,11 +698,21 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         localStorage.setItem(draftKey, JSON.stringify(next));
       } catch {}
 
-      // Sincronizar rascunho com a nuvem (Firestore) em background para handoff entre celulares
-      setDoc(doc(db, getDataPath('stockDrafts'), activeLocation), {
-        counts: next,
-        updatedAt: serverTimestamp()
-      }, { merge: true }).catch(err => console.warn('Error syncing draft to cloud:', err));
+      // Sincronizar rascunho com a nuvem (Firestore) em background de forma limpa (sem undefined)
+      try {
+        const cleanCounts: Record<string, any> = {};
+        Object.keys(next).forEach(k => {
+          const item = next[k];
+          cleanCounts[k] = JSON.parse(JSON.stringify(item, (_key, value) => value === undefined ? null : value));
+        });
+
+        setDoc(doc(db, getDataPath('stockDrafts'), activeLocation), {
+          counts: cleanCounts,
+          updatedAt: serverTimestamp()
+        }, { merge: true }).catch(err => console.warn('Error syncing draft to cloud:', err));
+      } catch (e) {
+        console.warn('Error serializing draft:', e);
+      }
 
       return next;
     });
@@ -766,6 +782,13 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     }));
   };
 
+  const handleToggleModificado = (id: string) => {
+    updateCountItem(id, prev => ({
+      ...prev,
+      modificado: !prev.modificado
+    }));
+  };
+
   // Itens filtrados para exibição (sempre em ordem alfabética)
   const filteredItems = useMemo(() => {
     return availableItemsForLocation
@@ -777,7 +800,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         const matchCat = selectedCategory === 'all' || catName === selectedCategory;
 
         const c = counts[item.id];
-        const isChecked = c && (c.modificado || c.quantidade > 0 || c.temAberto || c.statusBastante);
+        const isChecked = c && c.modificado;
         const matchPending = !showOnlyPending || !isChecked;
 
         return matchSearch && matchCat && matchPending;
@@ -880,7 +903,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
     availableItemsForLocation.forEach(def => {
       const c = counts[def.id];
       const effectiveMin = getEffectiveMin(def);
-      if (c && (c.modificado || c.quantidade > 0 || c.temAberto || c.statusBastante)) {
+      if (c && c.modificado) {
         preenchidos++;
       }
 
@@ -1174,16 +1197,19 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       // Save stock count history per item for weekly evolution analysis
       try {
         const weekInfo = getStockWeekInfo(new Date());
-        for (const def of availableItemsForLocation) {
+        for (const def of stockItems) {
           const c = counts[def.id];
-          const newLocationQty = c ? c.quantidade : 0;
-          const existingItem = stockData.find(s => 
+          const matchingDb = stockData.find(s => 
             s.produto.toLowerCase().trim() === def.produto.toLowerCase().trim() ||
             (s.id && s.id === def.id)
           );
-          const currentQuiosque = activeLocation === 'quiosque' ? newLocationQty : (existingItem?.estoqueQuiosque ?? 0);
-          const currentDeposito = activeLocation === 'deposito' ? newLocationQty : (existingItem?.estoqueDeposito ?? 0);
-          const totalEstoque = currentQuiosque + currentDeposito;
+          const quiosqueQty = activeLocation === 'quiosque' && c 
+            ? c.quantidade 
+            : (matchingDb?.estoqueQuiosque ?? 0);
+          const depositoQty = activeLocation === 'deposito' && c 
+            ? c.quantidade 
+            : (matchingDb?.estoqueDeposito ?? 0);
+          const totalEstoque = quiosqueQty + depositoQty;
 
           const historyDocId = `${def.id}_${weekInfo.weekKey}`;
           await safeSetDoc(doc(db, getDataPath('stockCountHistory'), historyDocId), {
@@ -1195,8 +1221,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             startDate: weekInfo.startDate,
             endDate: weekInfo.endDate,
             quantity: totalEstoque,
-            quiosqueQty: currentQuiosque,
-            depositoQty: currentDeposito,
+            quiosqueQty: quiosqueQty,
+            depositoQty: depositoQty,
             responsavel: responsavelName.trim(),
             timestamp: serverTimestamp()
           }, { merge: true });
@@ -1380,6 +1406,8 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   setFormData({
                     produto: '',
                     categoria: 'Gelados & Doces',
+                    categoriaQuiosque: 'Expositor',
+                    categoriaEstoque: 'Insumos',
                     local: 'ambos',
                     tipoContagem: 'unidade',
                     minimo: 10,
@@ -1417,17 +1445,6 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Categoria</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Gelados & Doces"
-                    value={formData.categoria}
-                    onChange={e => setFormData({ ...formData, categoria: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
-                  />
-                </div>
-                <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Local de Contagem</label>
                   <select
                     value={formData.local}
@@ -1439,6 +1456,34 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                     <option value="ambos">Ambos (Quiosque e Estoque)</option>
                   </select>
                 </div>
+
+                {(formData.local === 'quiosque' || formData.local === 'ambos') && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Categoria do Quiosque</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Expositor, Freezer..."
+                      value={formData.categoriaQuiosque}
+                      onChange={e => setFormData({ ...formData, categoriaQuiosque: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                    />
+                  </div>
+                )}
+
+                {(formData.local === 'deposito' || formData.local === 'ambos') && (
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Categoria do Estoque</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Limpeza, Insumos..."
+                      value={formData.categoriaEstoque}
+                      onChange={e => setFormData({ ...formData, categoriaEstoque: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Modelo de Contagem</label>
                   <select
@@ -1569,7 +1614,9 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                         setIsAddingItem(false);
                         setFormData({
                           produto: item.produto,
-                          categoria: item.categoria,
+                          categoria: item.categoria || 'Geral',
+                          categoriaQuiosque: item.categoriaQuiosque || item.categoria || 'Expositor',
+                          categoriaEstoque: item.categoriaEstoque || item.categoria || 'Insumos',
                           local: item.local,
                           tipoContagem: item.tipoContagem,
                           minimo: item.minimo,
@@ -1919,7 +1966,7 @@ export const StockCounting: React.FC<StockCountingProps> = ({
                       {autocompleteSuggestions.map((sug, idx) => {
                         const cat = activeLocation === 'quiosque' ? sug.categoriaQuiosque : sug.categoriaEstoque;
                         const count = counts[sug.id];
-                        const isChecked = count && (count.modificado || count.quantidade > 0 || count.temAberto || count.statusBastante);
+                        const isChecked = count && count.modificado;
                         const isSelected = highlightedIndex === idx;
 
                         return (
@@ -2096,26 +2143,42 @@ export const StockCounting: React.FC<StockCountingProps> = ({
               {/* Layout Responsivo Otimizado para Celular */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
                 <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
-                      {item.produto}
-                    </span>
-                    {locationCategory && locationCategory !== '-' && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
-                        {locationCategory}
+                  <div className="flex items-center gap-2 flex-wrap justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight">
+                        {item.produto}
                       </span>
-                    )}
-                    {item.local !== 'ambos' && (
-                      <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
-                        Apenas {item.local === 'quiosque' ? 'Quiosque' : 'Estoque'}
-                      </span>
-                    )}
-                    {isCake && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 flex items-center gap-1">
-                        <ChefHat className="w-3 h-3" />
-                        Produção Interna
-                      </span>
-                    )}
+                      {locationCategory && locationCategory !== '-' && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                          {locationCategory}
+                        </span>
+                      )}
+                      {item.local !== 'ambos' && (
+                        <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                          Apenas {item.local === 'quiosque' ? 'Quiosque' : 'Estoque'}
+                        </span>
+                      )}
+                      {isCake && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 flex items-center gap-1">
+                          <ChefHat className="w-3 h-3" />
+                          Produção Interna
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isCurrentLocationLocked && !isAdmin}
+                      onClick={() => handleToggleModificado(item.id)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition-all flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs",
+                        currentCount.modificado 
+                          ? "bg-emerald-600 text-white" 
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                      )}
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      {currentCount.modificado ? 'Conferido' : 'Conferir'}
+                    </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
                     <div className="flex items-center gap-1.5">
