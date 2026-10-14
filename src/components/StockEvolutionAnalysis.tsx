@@ -50,15 +50,37 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
   const fetchHistory = async () => {
     setRefreshing(true);
     try {
-      // Fetch from stockCountHistory
-      const q = query(collection(db, getDataPath('stockCountHistory')));
-      const snap = await getDocs(q);
-      const loaded: StockHistoryItem[] = [];
-      if (!snap.empty) {
-        snap.forEach(docSnap => {
-          loaded.push({ id: docSnap.id, ...docSnap.data() } as StockHistoryItem);
-        });
+      const loadedMap = new Map<string, StockHistoryItem>();
+
+      // Fetch from shared path
+      try {
+        const qShared = query(collection(db, 'users/shared_franquia_data/stockCountHistory'));
+        const snapShared = await getDocs(qShared);
+        if (!snapShared.empty) {
+          snapShared.forEach(docSnap => {
+            loadedMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as StockHistoryItem);
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching shared history:', e);
       }
+
+      // Fetch from dev path as well
+      try {
+        const qDev = query(collection(db, 'users/dev_qa_franquia_data/stockCountHistory'));
+        const snapDev = await getDocs(qDev);
+        if (!snapDev.empty) {
+          snapDev.forEach(docSnap => {
+            if (!loadedMap.has(docSnap.id)) {
+              loadedMap.set(docSnap.id, { id: docSnap.id, ...docSnap.data() } as StockHistoryItem);
+            }
+          });
+        }
+      } catch (e) {
+        console.error('Error fetching dev history:', e);
+      }
+
+      let loaded = Array.from(loadedMap.values());
 
       // If no history items exist yet, let's also fetch current stock items to initialize Semana 1 (03-09/10) as a fallback/seed so the user immediately sees Semana 1 data!
       if (loaded.length === 0) {
