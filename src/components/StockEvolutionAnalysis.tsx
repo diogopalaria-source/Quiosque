@@ -82,31 +82,6 @@ export const StockEvolutionAnalysis: React.FC<StockEvolutionAnalysisProps> = ({
 
       let loaded = Array.from(loadedMap.values());
 
-      // If no history items exist yet, let's also fetch current stock items to initialize Semana 1 (03-09/10) as a fallback/seed so the user immediately sees Semana 1 data!
-      if (loaded.length === 0) {
-        const stockSnap = await getDocs(collection(db, getDataPath('stock')));
-        if (!stockSnap.empty) {
-          const defaultWeekKey = '2026-10-03';
-          const defaultWeekLabel = 'Semana 1 (03-09/10)';
-          stockSnap.forEach(sDoc => {
-            const sData = sDoc.data();
-            loaded.push({
-              id: `${sDoc.id}_${defaultWeekKey}`,
-              productId: sDoc.id,
-              productName: sData.produto || 'Produto',
-              category: sData.categoria || 'Geral',
-              weekKey: defaultWeekKey,
-              weekLabel: defaultWeekLabel,
-              startDate: '2026-10-03',
-              endDate: '2026-10-09',
-              quantity: sData.estoqueAtual ?? 0,
-              quiosqueQty: sData.estoqueQuiosque ?? 0,
-              depositoQty: sData.estoqueDeposito ?? 0
-            });
-          });
-        }
-      }
-
       setHistoryItems(loaded);
     } catch (err) {
       console.error('Error fetching stock history:', err);
