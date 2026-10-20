@@ -157,7 +157,7 @@ service cloud.firestore {
 
     // Rules for shared access
     match /users/{userId} {
-      allow read: if true; // Permite leitura pública do caminho compartilhado via PIN/Link
+      allow read, write: if true; // Permite leitura e escrita pública/compartilhada para quiosque, estoque e gestão
       
       match /sales/{saleId} {
         allow read: if true;

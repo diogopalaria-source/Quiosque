@@ -1203,12 +1203,20 @@ export const StockCounting: React.FC<StockCountingProps> = ({
             s.produto.toLowerCase().trim() === def.produto.toLowerCase().trim() ||
             (s.id && s.id === def.id)
           );
-          const quiosqueQty = activeLocation === 'quiosque' && c 
+          const itemLocal = (def.local || 'ambos').toLowerCase().trim();
+          let quiosqueQty = activeLocation === 'quiosque' && c 
             ? c.quantidade 
             : (matchingDb?.estoqueQuiosque ?? 0);
-          const depositoQty = activeLocation === 'deposito' && c 
+          let depositoQty = activeLocation === 'deposito' && c 
             ? c.quantidade 
             : (matchingDb?.estoqueDeposito ?? 0);
+
+          if (itemLocal === 'quiosque') {
+            depositoQty = 0;
+          } else if (itemLocal === 'deposito' || itemLocal === 'estoque') {
+            quiosqueQty = 0;
+          }
+
           const temAberto = activeLocation === 'quiosque' && c 
             ? (c.temAberto ?? false) 
             : (matchingDb?.temAberto ?? false);
@@ -1216,6 +1224,11 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           let totalEstoque = quiosqueQty + depositoQty;
           if (def.tipoContagem === 'embalagem_com_aberto' && temAberto) {
             totalEstoque += 1;
+          }
+          if (itemLocal === 'quiosque') {
+            totalEstoque = quiosqueQty + (def.tipoContagem === 'embalagem_com_aberto' && temAberto ? 1 : 0);
+          } else if (itemLocal === 'deposito' || itemLocal === 'estoque') {
+            totalEstoque = depositoQty;
           }
 
           const historyDocId = `${def.id}_${weekInfo.weekKey}`;
