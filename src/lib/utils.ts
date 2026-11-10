@@ -7,7 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const getBasePath = (): string => {
-  return 'users/shared_franquia_data';
+  const isDevOrStudio = typeof window !== 'undefined' && (
+    window.location.hostname.includes('ais-dev-') || 
+    window.location.hostname.includes('localhost') || 
+    window.location.hostname.includes('127.0.0.1') ||
+    (import.meta as any).env?.DEV
+  );
+  return isDevOrStudio ? 'users/dev_qa_franquia_data' : 'users/shared_franquia_data';
 };
 
 export const getDataPath = (subcollection?: string): string => {

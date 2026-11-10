@@ -159,6 +159,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if true; // Permite leitura e escrita pública/compartilhada para quiosque, estoque e gestão
       
+      match /{document=**} {
+        allow read, write: if true;
+      }
+      
       match /sales/{saleId} {
         allow read: if true;
         allow create: if isAuthorized() && isValidSale(request.resource.data);

@@ -48,6 +48,7 @@ export interface StockItem {
   estoqueMinimo?: number;
   estoqueQuiosque?: number;
   estoqueDeposito?: number;
+  temAberto?: boolean;
   dataContagemQuiosque?: string;
   dataContagemDeposito?: string;
   responsavelContagem?: string;
@@ -217,4 +218,16 @@ export interface TemperatureMeasurement {
   userId: string; // Shared or specific user ownership ID
   createdAt?: any;
 }
+
+export interface CustomerRecord {
+  id?: string;
+  nomeCliente: string;
+  telefone: string;
+  lojaParceira: string;
+  valorPedido?: number;
+  dataCadastro: string; // YYYY-MM-DD
+  userId: string;
+  createdAt?: any;
+}
+
 

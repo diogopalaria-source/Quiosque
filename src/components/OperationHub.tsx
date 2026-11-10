@@ -14,13 +14,15 @@ import {
   PackageCheck,
   Settings,
   Users,
-  BarChart3
+  BarChart3,
+  UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WasteRegistration } from './WasteRegistration';
 import { PurchaseRequests } from './PurchaseRequests';
 import { RecipeManager } from './RecipeManager';
 import { StaffDiscountManager } from './StaffDiscountManager';
+import { CustomerRegistration } from './CustomerRegistration';
 
 import { StaffManager } from './StaffManager';
 import { TemperatureControl } from './TemperatureControl';
@@ -46,7 +48,7 @@ interface OperationHubProps {
   selectedMonths?: string[];
 }
 
-type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub' | 'stock_evolution';
+type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub' | 'stock_evolution' | 'customer_registration';
 
 export const OperationHub: React.FC<OperationHubProps> = ({
   userId,
@@ -75,6 +77,14 @@ export const OperationHub: React.FC<OperationHubProps> = ({
       color: 'bg-purple-50 text-purple-700 border-purple-200',
       iconBg: 'bg-purple-100'
     }] : []),
+    {
+      id: 'customer_registration',
+      title: 'Cadastro de Cliente',
+      description: 'Cadastro de novos clientes, indicação de loja parceira, pedidos e contato WhatsApp.',
+      icon: UserPlus,
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      iconBg: 'bg-emerald-100'
+    },
     {
       id: 'waste',
       title: 'Desperdício e Reuso',
@@ -170,7 +180,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
           <div className="mt-4 flex items-center justify-center">
             <button
               onClick={() => setShowShareModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-xl shadow-xs text-xs font-black uppercase tracking-wider transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-xl shadow-xs text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-emerald-600" />
               <span>QR Code - Contagem de Estoque (Celular Offline)</span>
@@ -186,7 +196,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
               whileTap={{ scale: 0.98 }}
               onClick={() => setCurrentView(item.id as OperationView)}
               className={cn(
-                "flex flex-col items-start p-8 rounded-[2.5rem] border-2 text-left transition-all shadow-sm h-full",
+                "flex flex-col items-start p-8 rounded-[2.5rem] border-2 text-left transition-all shadow-sm h-full cursor-pointer",
                 item.color
               )}
             >
@@ -230,7 +240,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
         <div className="flex items-center justify-between mb-4">
           <button 
             onClick={() => setCurrentView('menu')}
-            className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-all font-black text-slate-400 text-[10px] uppercase tracking-widest"
+            className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-all font-black text-slate-400 text-[10px] uppercase tracking-widest cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar ao Menu
@@ -257,7 +267,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
               whileTap={{ scale: 0.98 }}
               onClick={() => setCurrentView(item.id as OperationView)}
               className={cn(
-                "flex flex-col items-start p-7 rounded-[2rem] border-2 text-left transition-all shadow-sm h-full",
+                "flex flex-col items-start p-7 rounded-[2rem] border-2 text-left transition-all shadow-sm h-full cursor-pointer",
                 item.color
               )}
             >
@@ -284,7 +294,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
       <div className="flex items-center justify-between mb-4">
         <button 
           onClick={() => setCurrentView(userRole === 'admin' ? 'system_hub' : 'menu')}
-          className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-all font-black text-slate-400 text-[10px] uppercase tracking-widest"
+          className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-all font-black text-slate-400 text-[10px] uppercase tracking-widest cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           {userRole === 'admin' ? 'Voltar à Gestão do Sistema' : 'Voltar ao Menu'}
@@ -303,6 +313,14 @@ export const OperationHub: React.FC<OperationHubProps> = ({
            exit={{ opacity: 0, scale: 0.98 }}
            transition={{ duration: 0.2 }}
         >
+          {currentView === 'customer_registration' && (
+            <CustomerRegistration 
+              userId={userId}
+              userRole={userRole}
+              onBack={() => setCurrentView('menu')}
+            />
+          )}
+
           {currentView === 'waste' && (
             <WasteRegistration 
               userId={userId} 
