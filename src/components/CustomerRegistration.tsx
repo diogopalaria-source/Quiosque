@@ -42,19 +42,25 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
   const isAdmin = userRole === 'admin';
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [partnerStores, setPartnerStores] = useState<string[]>(() => {
+    let stores = ['Não veio de Loja Parceira', 'GranVision', 'Acium'];
     try {
       const cached = localStorage.getItem('app_partner_stores');
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          stores = parsed.filter((s: string) => s.toLowerCase() !== 'traxart');
+        }
       }
     } catch {}
-    return ['GranVision', 'Acium'];
+    if (!stores.includes('Não veio de Loja Parceira')) {
+      stores.unshift('Não veio de Loja Parceira');
+    }
+    return stores;
   });
 
   const [nomeCliente, setNomeCliente] = useState('');
   const [telefone, setTelefone] = useState('');
-  const [lojaParceira, setLojaParceira] = useState('GranVision');
+  const [lojaParceira, setLojaParceira] = useState('Não veio de loja parceira');
   const [outraLoja, setOutraLoja] = useState('');
   const [valorPedido, setValorPedido] = useState('');
 
@@ -162,7 +168,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
 
       setNomeCliente('');
       setTelefone('');
-      setLojaParceira('GranVision');
+      setLojaParceira('Não veio de loja parceira');
       setOutraLoja('');
       setValorPedido('');
       setSuccessMsg('Cliente cadastrado com sucesso!');
@@ -243,7 +249,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
   const openWhatsApp = (phone: string, clientName: string) => {
     const cleanPhone = phone.replace(/\D/g, '');
     const numberWithCountry = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
-    const text = `Oi, ${clientName}! Obrigado por escolher a Mr. Cheney - Shopping Plaza Sul hoje! 🍪❤️\n\nGostou do seu pedido? Conta pra gente no Google, sua avaliação nos ajuda muito:\nhttps://g.page/r/CYuaHyI6aNErEBM/review\n\nE quando quiser receber o verdadeiro cookie americano quentinho em casa, peça pela nossa loja no iFood:\nhttps://www.ifood.com.br/delivery/sao-paulo-sp/mr-cheney---plaza-sul-bosque-da-saude/4dbd8bd8-3ff3-4e5c-8d4f-cec75c600649\n\nJá estamos esperando sua próxima visita ao nosso quiosque no Piso P0! Até breve!`;
+    const text = `Oi, ${clientName}! Obrigado por escolher a Mr. Cheney - Shopping Plaza Sul hoje! 🍪❤️\n\nGostou do seu pedido? Conta pra gente no Google, sua avaliação nos ajuda muito:\nhttps://g.page/r/CYuaHyI6aNErEBM/review\n\nE quando quiser receber o verdadeiro cookie americano quentinho em casa, peça pela nossa loja no iFood:\nhttps://www.ifood.com.br/delivery/sao-paulo-sp/mr-cheney---plaza-sul-bosque-da-saude/4dbd8bd8-3ff3-4e5c-8d4f-cec75c600649\n\nSiga também nosso Instagram @mrcheney.shopplazasul (https://www.instagram.com/mrcheney.shopplazasul/) para acompanhar todas as novidades! Já estamos esperando sua próxima visita ao nosso quiosque no Piso P0!\n\nAté breve!`;
     const message = encodeURIComponent(text);
     window.open(`https://api.whatsapp.com/send?phone=${numberWithCountry}&text=${message}`, '_blank');
   };
