@@ -16,7 +16,8 @@ import {
   Users,
   BarChart3,
   UserPlus,
-  Trophy
+  Trophy,
+  Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WasteRegistration } from './WasteRegistration';
@@ -25,6 +26,7 @@ import { RecipeManager } from './RecipeManager';
 import { StaffDiscountManager } from './StaffDiscountManager';
 import { CustomerRegistration } from './CustomerRegistration';
 import { WeeklyGoals } from './WeeklyGoals';
+
 
 import { StaffManager } from './StaffManager';
 import { TemperatureControl } from './TemperatureControl';
@@ -187,7 +189,7 @@ export const OperationHub: React.FC<OperationHubProps> = ({
         <div className="mb-10 text-center">
           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Gestão do Quiosque</h1>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Clique no card para registrar</p>
-          <div className="mt-4 flex items-center justify-center">
+          <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
             <button
               onClick={() => setShowShareModal(true)}
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-xl shadow-xs text-xs font-black uppercase tracking-wider transition-all cursor-pointer"

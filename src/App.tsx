@@ -40,6 +40,7 @@ import { PurchaseReviewModal } from './components/PurchaseReviewModal';
 import { Dashboard } from './components/Dashboard';
 import { Indicators } from './components/Indicators';
 import { CSVUpload } from './components/CSVUpload';
+import { PosApiSyncCard } from './components/PosApiSyncCard';
 import { CashFlow } from './components/CashFlow';
 import { OperationHub } from './components/OperationHub';
 import { InventoryDashboard } from './components/InventoryDashboard';
@@ -2743,6 +2744,7 @@ export default function App() {
               transition={{ duration: 0.3 }}
               className="grid grid-cols-1 md:grid-cols-2 gap-8"
             >
+              <PosApiSyncCard />
               <CSVUpload 
                 title="Vendas Realizadas" 
                 onDataLoaded={async (data, mode) => {

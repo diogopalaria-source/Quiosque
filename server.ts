@@ -559,6 +559,55 @@ app.post("/api/alfalabs/validate", async (req, res) => {
   }
 });
 
+// API Endpoint to Test POS API Connection
+app.post("/api/test-pos-api", async (req, res) => {
+  try {
+    const { url, method = 'GET', headers = {}, body } = req.body;
+    if (!url) {
+      return res.status(400).json({ success: false, error: "URL da API não informada" });
+    }
+
+    const fetchOptions: RequestInit = {
+      method,
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...headers
+      }
+    };
+
+    if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+    }
+
+    const startTime = Date.now();
+    const response = await fetch(url, fetchOptions);
+    const responseTime = Date.now() - startTime;
+    const contentType = response.headers.get("content-type") || "";
+
+    let responseData: any;
+    if (contentType.includes("application/json")) {
+      responseData = await response.json();
+    } else {
+      responseData = await response.text();
+    }
+
+    return res.json({
+      success: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      responseTimeMs: responseTime,
+      data: responseData
+    });
+  } catch (error: any) {
+    console.error("Erro ao testar API do POS:", error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Erro de conexão com o endpoint informado"
+    });
+  }
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
