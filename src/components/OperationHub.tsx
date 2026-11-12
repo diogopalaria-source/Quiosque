@@ -15,7 +15,8 @@ import {
   Settings,
   Users,
   BarChart3,
-  UserPlus
+  UserPlus,
+  Trophy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WasteRegistration } from './WasteRegistration';
@@ -23,6 +24,7 @@ import { PurchaseRequests } from './PurchaseRequests';
 import { RecipeManager } from './RecipeManager';
 import { StaffDiscountManager } from './StaffDiscountManager';
 import { CustomerRegistration } from './CustomerRegistration';
+import { WeeklyGoals } from './WeeklyGoals';
 
 import { StaffManager } from './StaffManager';
 import { TemperatureControl } from './TemperatureControl';
@@ -48,7 +50,7 @@ interface OperationHubProps {
   selectedMonths?: string[];
 }
 
-type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub' | 'stock_evolution' | 'customer_registration';
+type OperationView = 'menu' | 'waste' | 'consumption' | 'payments' | 'purchase' | 'recipes' | 'discounts' | 'temperature' | 'stock_count' | 'staff_management' | 'system_hub' | 'stock_evolution' | 'customer_registration' | 'weekly_goals';
 
 export const OperationHub: React.FC<OperationHubProps> = ({
   userId,
@@ -116,6 +118,14 @@ export const OperationHub: React.FC<OperationHubProps> = ({
       icon: Thermometer,
       color: 'bg-indigo-50 text-indigo-600 border-indigo-100',
       iconBg: 'bg-indigo-100'
+    },
+    {
+      id: 'weekly_goals',
+      title: 'Metas Semanais (Bônus)',
+      description: 'Acompanhe as metas de faturamento (Qui a Qua), níveis de bônus e evolução de vendas.',
+      icon: Trophy,
+      color: 'bg-amber-50 text-amber-700 border-amber-200',
+      iconBg: 'bg-amber-100'
     }
   ];
 
@@ -313,6 +323,15 @@ export const OperationHub: React.FC<OperationHubProps> = ({
            exit={{ opacity: 0, scale: 0.98 }}
            transition={{ duration: 0.2 }}
         >
+          {currentView === 'weekly_goals' && (
+            <WeeklyGoals 
+              userId={userId}
+              userRole={userRole}
+              salesData={salesData}
+              onBack={() => setCurrentView('menu')}
+            />
+          )}
+
           {currentView === 'customer_registration' && (
             <CustomerRegistration 
               userId={userId}

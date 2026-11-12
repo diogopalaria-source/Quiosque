@@ -1,4 +1,5 @@
 export interface Sale {
+  id?: string;
   data: string;
   mes?: string;
   produto: string;
@@ -229,5 +230,17 @@ export interface CustomerRecord {
   userId: string;
   createdAt?: any;
 }
+
+export interface WeeklyGoalRecord {
+  id?: string;
+  weekKey: string; // e.g. '2026-11-12' (Thursday)
+  startDate: string; // Thursday YYYY-MM-DD
+  endDate: string; // Wednesday YYYY-MM-DD
+  previousYearSales: number; // Sales of the same week last year
+  dailySales?: Record<string, number>; // dateKey ('yyyy-MM-dd') -> amount
+  userId: string;
+  createdAt?: any;
+}
+
 
 
