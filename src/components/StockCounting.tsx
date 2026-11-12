@@ -1002,11 +1002,14 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       const pendingSnap = await getDocs(
         query(collection(db, getDataPath('purchaseRequests')), where('status', '==', 'pendente'))
       );
-      const existingPendingMap = new Map<string, string>();
+      const existingPendingMap = new Map<string, { id: string; isManual: boolean }>();
       pendingSnap.docs.forEach(docSnap => {
-        const prod = (docSnap.data().produto || '').toLowerCase().trim();
+        const data = docSnap.data();
+        const prod = (data.produto || '').toLowerCase().trim();
+        const solicitante = String(data.usuarioSolicitante || '').toLowerCase();
+        const isManual = !solicitante.includes('contagem') && !solicitante.includes('produção') && !solicitante.includes('sistema');
         if (prod) {
-          existingPendingMap.set(prod, docSnap.id);
+          existingPendingMap.set(prod, { id: docSnap.id, isManual });
         }
       });
 
@@ -1148,7 +1151,13 @@ export const StockCounting: React.FC<StockCountingProps> = ({
         if (precisaPedir) {
           const isCake = def.ehBoloProducao || isCakeProduction(def.produto);
           const normalizedProdName = def.produto.toLowerCase().trim();
-          const existingPendingId = existingPendingMap.get(normalizedProdName);
+          const existingInfo = existingPendingMap.get(normalizedProdName);
+
+          if (existingInfo && existingInfo.isManual) {
+            // Se já existe um pedido manual criado pelo atendente/gestor, NÃO sobrescrever! Preservar intacto.
+            continue;
+          }
+          const existingPendingId = existingInfo?.id;
 
           if (isCake) {
             cakesProductionCount++;

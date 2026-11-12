@@ -985,6 +985,27 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                         {req.produto}
                       </h4>
 
+                      {(() => {
+                        const isManualRequest = !String(req.usuarioSolicitante || '').toLowerCase().includes('contagem') && 
+                                                !String(req.usuarioSolicitante || '').toLowerCase().includes('produção') && 
+                                                !String(req.usuarioSolicitante || '').toLowerCase().includes('sistema');
+                        if (isManualRequest && !isCake) {
+                          return (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[9px] font-black uppercase rounded-full">
+                              👤 Solicitação Manual
+                            </span>
+                          );
+                        }
+                        if (!isManualRequest && !isCake) {
+                          return (
+                            <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[9px] font-black uppercase rounded-full">
+                              📊 Reposição Contagem
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+
                       {isCake && (
                         <span className="px-2 py-0.5 bg-amber-500 text-white text-[9px] font-black uppercase rounded-full flex items-center gap-1 shadow-xs">
                           <ChefHat className="w-3 h-3" /> Produção Interna

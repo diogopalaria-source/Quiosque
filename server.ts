@@ -4,11 +4,76 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import cron from "node-cron";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+
+// Schedule cron job to run daily at 06:00 AM (0 6 * * *)
+cron.schedule("0 6 * * *", async () => {
+  console.log("[Cron 06:00 AM] Executing automatic daily sales sync from Alfalabs API...");
+  try {
+    const token = "7e00399e6a8823af50e5a841b8f158821f91b685";
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    const targetDate = d.toISOString().split("T")[0];
+    
+    console.log(`[Cron 06:00 AM] Fetching orders for date: ${targetDate}`);
+    const url = `https://api.alfalabs.com.br/v2/orders?date=${targetDate}`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (response.ok) {
+      const json: any = await response.json();
+      let items: any[] = [];
+      if (Array.isArray(json)) {
+        items = json;
+      } else if (json.orders && Array.isArray(json.orders)) {
+        items = json.orders;
+      } else if (json.data && Array.isArray(json.data)) {
+        items = json.data;
+      } else if (json.items && Array.isArray(json.items)) {
+        items = json.items;
+      } else {
+        items = [json];
+      }
+
+      let dayNetSum = 0;
+      items.forEach((order: any) => {
+        const orderNetTotal = Number(
+          order.total?.orderAmount || 
+          (Number(order.total?.subTotal || 0) - Number(order.discountDetails?.discount || order.total?.discount || 0)) || 
+          order.total?.subTotal || 
+          0
+        );
+        if (orderNetTotal > 0) {
+          dayNetSum += orderNetTotal;
+        }
+      });
+
+      console.log(`[Cron 06:00 AM] Sucesso! Data: ${targetDate}, Pedidos: ${items.length}, Total Líquido (Metas): R$ ${dayNetSum.toFixed(2)}`);
+      const cronLogPath = path.join(process.cwd(), 'alfa_labs_cron_log.json');
+      const logData = {
+        lastRun: new Date().toISOString(),
+        targetDate,
+        ordersCount: items.length,
+        totalNetSales: dayNetSum,
+        success: true
+      };
+      fs.writeFileSync(cronLogPath, JSON.stringify(logData, null, 2));
+    } else {
+      console.warn(`[Cron 06:00 AM] Falha na API Alfalabs: Status ${response.status}`);
+    }
+  } catch (err) {
+    console.error("[Cron 06:00 AM] Erro ao executar sincronização automática:", err);
+  }
+});
 
 // Increase payload size limit to digest base64 documents safely
 app.use(express.json({ limit: "50mb" }));
