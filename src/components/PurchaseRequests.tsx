@@ -21,13 +21,14 @@ import {
   ChefHat
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDocs, query, where, onSnapshot, limit } from 'firebase/firestore';
+import { collection, serverTimestamp, doc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logAction } from '../lib/logs';
 import { PurchaseRequest, MACRO_INGREDIENTS, StockItem } from '../types';
-import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath } from '../lib/utils';
+import { cn, formatCurrency, getMacroForProduct, getDataPath, getBasePath, getPurchaseRequestsPath } from '../lib/utils';
 import { format } from 'date-fns';
 import { handleFirestoreError, OperationType, safeAddDoc, safeUpdateDoc } from '../lib/firestoreUtils';
+import { purchaseRequestsStore } from '../lib/purchaseRequestsStore';
 import { Search } from 'lucide-react';
 import { isCakeProduction, CAKE_PRODUCTION_NAMES, PREDEFINED_STOCK_ITEMS } from '../data/kioskStockList';
 
@@ -52,91 +53,23 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   const [newRequest, setNewRequest] = useState('');
   const [newQuantity, setNewQuantity] = useState('');
   const [newUnit, setNewUnit] = useState('un');
-  const [newRequester, setNewRequester] = useState(() => {
-    try {
-      return localStorage.getItem('last_purchase_solicitante') || '';
-    } catch {
-      return '';
-    }
-  });
-  const [newObs, setNewObs] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-  const [staffList, setStaffList] = useState<string[]>([]);
 
-  // Estado local com sincronização em tempo real e atualização otimista instantânea
+  // Estado sincronizado exclusivamente pela arquitetura dedicada purchaseRequestsStore (Outbox + Streams separados)
   const [localRequests, setLocalRequests] = useState<PurchaseRequest[]>(() => {
-    try {
-      const cached = localStorage.getItem(`app_cache_${getDataPath('purchaseRequests')}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch {}
-    return requests || [];
+    const snap = purchaseRequestsStore.getSnapshot();
+    return snap.length > 0 ? snap : (requests || []);
   });
 
-  // Atualizar quando props mudarem sem perder dados locais
   React.useEffect(() => {
-    if (requests && requests.length > 0) {
-      setLocalRequests(prev => {
-        const propMap = new Map(requests.map(r => [r.id, r]));
-        const localNew = prev.filter(r => r.id && !propMap.has(r.id));
-        return [...requests, ...localNew];
-      });
-    }
-  }, [requests]);
-
-  // Listener em tempo real do Firestore para pedidos de compra (limitado para preservar cota diária)
-  React.useEffect(() => {
-    try {
-      const colRef = collection(db, getDataPath('purchaseRequests'));
-      const q = query(colRef, limit(200));
-      const unsubscribe = onSnapshot(q, (snap) => {
-        const items: PurchaseRequest[] = [];
-        snap.forEach(docSnap => {
-          items.push({ ...docSnap.data(), id: docSnap.id } as PurchaseRequest);
-        });
-        setLocalRequests(items);
-        try {
-          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(items));
-        } catch {}
-        window.dispatchEvent(new CustomEvent('purchase-requests-synced', { detail: items }));
-      }, (err) => {
-        console.warn('onSnapshot para purchaseRequests em modo cache:', err);
-      });
-      return () => unsubscribe();
-    } catch (err) {
-      console.warn('Erro ao conectar onSnapshot para purchaseRequests:', err);
-    }
+    const unsubscribe = purchaseRequestsStore.subscribe((items) => {
+      setLocalRequests(items);
+    });
+    void purchaseRequestsStore.forceRefresh();
+    return () => unsubscribe();
   }, [userId]);
-
-  // Carregar lista de colaboradores cadastrados
-  React.useEffect(() => {
-    const fetchStaff = async () => {
-      try {
-        const snap = await getDocs(collection(db, getDataPath('systemStaff')));
-        if (!snap.empty) {
-          const names: string[] = [];
-          snap.forEach(d => {
-            const data = d.data();
-            if (data.nome && typeof data.nome === 'string') {
-              names.push(data.nome.trim());
-            }
-          });
-          if (names.length > 0) {
-            setStaffList(Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'pt-BR')));
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching staff for purchase requests:', err);
-      }
-    };
-    fetchStaff();
-  }, []);
 
   const dynamicSuppliers = React.useMemo(() => {
     const baseSuppliers = [
@@ -235,15 +168,9 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
     setError(null);
     try {
       const isCake = isCakeProduction(cleanProd);
-      const requester = newRequester.trim() || (isCake ? 'Operação (Produção Interna)' : 'Operação');
-      
-      try {
-        if (newRequester.trim()) {
-          localStorage.setItem('last_purchase_solicitante', newRequester.trim());
-        }
-      } catch {}
+      const requester = isCake ? 'Operação (Produção Interna)' : 'Operação';
 
-      const record: Record<string, any> = {
+      const record: Omit<PurchaseRequest, 'id'> = {
         produto: cleanProd,
         status: 'pendente',
         usuarioSolicitante: requester,
@@ -251,8 +178,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         urgente: Boolean(isUrgent),
         tipoItem: isCake ? 'producao' : 'compra',
         ehProducao: Boolean(isCake),
-        userId: userId || getBasePath(),
-        createdAt: serverTimestamp()
+        userId: userId || getBasePath()
       };
 
       if (isCake) {
@@ -266,35 +192,16 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         }
       }
 
-      if (newObs.trim()) {
-        record.observacao = newObs.trim();
-      }
-
-      const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), record);
-      
-      const newCreatedItem: PurchaseRequest = {
-        ...record,
-        id: docRef?.id || `req_${Date.now()}`
-      } as PurchaseRequest;
-
-      // Atualização otimista imediata na interface
-      setLocalRequests(prev => {
-        const next = [newCreatedItem, ...prev.filter(r => r.id !== newCreatedItem.id)];
-        try {
-          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: newCreatedItem }));
+      const { item: newCreatedItem } = await purchaseRequestsStore.createRequest(record);
 
       try {
         await logAction(
           'Criação', 
           'Pedido Compra', 
-          `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''} por ${requester}`, 
+          `Solicitou compra/produção de: ${record.produto}${record.urgente ? ' (URGENTE)' : ''}`, 
           'purchaseRequests', 
-          docRef.id, 
-          record,
+          newCreatedItem.id!, 
+          newCreatedItem,
           requester
         );
       } catch (logErr) {
@@ -306,7 +213,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         if ('Notification' in window) {
           if (Notification.permission === 'granted') {
             new Notification('COMPRA URGENTE SOLICITADA!', {
-              body: `O produto "${cleanProd}" foi marcado como urgente por ${requester}.`,
+              body: `O produto "${cleanProd}" foi marcado como urgente.`,
               icon: '/favicon.ico'
             });
           } else if (Notification.permission !== 'denied') {
@@ -317,21 +224,15 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
 
       setNewRequest('');
       setNewQuantity('');
-      setNewObs('');
+      setNewUnit('un');
       setIsUrgent(false);
       setShowAddForm(false);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 4000);
     } catch (err: any) {
       console.error('Erro ao adicionar pedido de compra:', err);
-      handleFirestoreError(err, OperationType.WRITE, getDataPath('purchaseRequests'));
-      const msg = err?.message || '';
-      if (msg.includes('Quota limit exceeded')) {
-        setError('Solicitação registrada em modo offline com sucesso!');
-        setSuccess(true);
-      } else {
-        setError('Erro ao salvar solicitação. Verifique sua conexão.');
-      }
+      handleFirestoreError(err, OperationType.WRITE, getPurchaseRequestsPath());
+      setError('Erro ao salvar solicitação. Tente novamente.');
       setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
@@ -341,16 +242,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
   const handleDelete = async (id: string) => {
     try {
       const existingReq = localRequests?.find(r => r.id === id);
-      setLocalRequests(prev => {
-        const next = prev.filter(r => r.id !== id);
-        try {
-          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-      window.dispatchEvent(new CustomEvent('purchase-requests-deleted', { detail: id }));
-
-      await deleteDoc(doc(db, getDataPath('purchaseRequests'), id));
+      await purchaseRequestsStore.deleteRequest(id);
       await logAction('Exclusão', 'Pedido Compra', `Excluiu pedido de compra para "${existingReq?.produto || id}"`, 'purchaseRequests', id, existingReq || {});
     } catch (err) {
       console.error(err);
@@ -429,8 +321,6 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       const vTotal = confirmModal.useTotal ? Number(confirmModal.valorTotal) : Number(confirmModal.valorUnitario) * q;
       const vUnit = confirmModal.useTotal ? Number(confirmModal.valorTotal) / q : Number(confirmModal.valorUnitario);
 
-      // We store the quantitative part for calculations and string for display
-      const requestRef = doc(db, getDataPath('purchaseRequests'), confirmModal.request.id!);
       const payloadUpdate = {
         status: 'comprado' as const,
         produto: confirmModal.produtoNome,
@@ -444,20 +334,12 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
         naoConsiderarEstoque: confirmModal.naoConsiderarEstoque,
         fornecedor: confirmModal.fornecedor
       };
-      await safeUpdateDoc(requestRef, payloadUpdate);
-      setLocalRequests(prev => {
-        const next = prev.map(r => r.id === confirmModal.request!.id ? { ...r, ...payloadUpdate } : r);
-        try {
-          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...confirmModal.request, ...payloadUpdate } }));
+      await purchaseRequestsStore.updateRequest(confirmModal.request.id!, payloadUpdate);
       await logAction('Edição', 'Pedido Compra', `Marcou solicitacao de "${confirmModal.request.produto}" como comprado`, 'purchaseRequests', confirmModal.request.id!, { ...confirmModal.request, ...payloadUpdate });
 
       setConfirmModal({ ...confirmModal, show: false, request: null });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, getDataPath('purchaseRequests'));
+      handleFirestoreError(err, OperationType.UPDATE, getPurchaseRequestsPath());
     } finally {
       setLoading(false);
     }
@@ -533,15 +415,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
           destinoProducao: destino,
           observacao: `Bolo produzido internamente (${qtd} un enviadas para o ${destino === 'quiosque' ? 'Quiosque' : 'Estoque'}) por ${responsavel}`
         };
-        await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id), updateCakePayload);
-        setLocalRequests(prev => {
-          const next = prev.map(r => r.id === req.id ? { ...r, ...updateCakePayload } : r);
-          try {
-            localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-          } catch {}
-          return next;
-        });
-        window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, ...updateCakePayload } }));
+        await purchaseRequestsStore.updateRequest(req.id, updateCakePayload);
       }
 
       // 3. Registrar Log de Auditoria
@@ -580,20 +454,11 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
       const [year, month, day] = purchaseDate.split('-');
       const mesRef = `${month}/${year}`;
       
-      const pathRequests = getDataPath('purchaseRequests');
       const updatedReqPayload = {
         status: 'recebido' as const,
         dataRecebimento: format(new Date(), 'yyyy-MM-dd')
       };
-      await safeUpdateDoc(doc(db, pathRequests, req.id), updatedReqPayload);
-      setLocalRequests(prev => {
-        const next = prev.map(r => r.id === req.id ? { ...r, ...updatedReqPayload } : r);
-        try {
-          localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-      window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, ...updatedReqPayload } }));
+      await purchaseRequestsStore.updateRequest(req.id, updatedReqPayload);
       await logAction('Edição', 'Pedido Compra', `Confirmou recebimento de "${req.produto}"`, 'purchaseRequests', req.id, { ...req, ...updatedReqPayload });
 
       const qtyToAdd = req.quantidadeNumerica || Number(req.quantidade?.split(' ')[0]) || 0;
@@ -793,6 +658,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                     </label>
                     <input 
                       autoFocus
+                      required
                       placeholder="Ex: Cookie Macadâmia, Café Grão, Copo 300ml..."
                       className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all"
                       value={newRequest}
@@ -828,7 +694,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                        Quantidade (Opcional)
+                        Quantidade
                       </label>
                       <input 
                         type="text"
@@ -857,48 +723,6 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                         <option value="balde">Balde</option>
                       </select>
                     </div>
-                  </div>
-
-                  {/* Solicitante */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                      Quem está solicitando
-                    </label>
-                    {staffList.length > 0 ? (
-                      <select
-                        value={newRequester}
-                        onChange={(e) => setNewRequester(e.target.value)}
-                        className="w-full text-sm font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
-                      >
-                        <option value="">Selecione o atendente / responsável...</option>
-                        {staffList.map(name => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                        <option value="Operação (Quiosque)">Operação (Quiosque)</option>
-                      </select>
-                    ) : (
-                      <input 
-                        type="text"
-                        placeholder="Nome do atendente..."
-                        className="w-full text-sm font-bold text-slate-900 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
-                        value={newRequester}
-                        onChange={(e) => setNewRequester(e.target.value)}
-                      />
-                    )}
-                  </div>
-
-                  {/* Observação Opcional */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
-                      Observação (Opcional)
-                    </label>
-                    <input 
-                      type="text"
-                      placeholder="Ex: Marca específica, comprar hoje..."
-                      className="w-full text-xs font-semibold text-slate-700 placeholder:text-slate-300 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:bg-white focus:border-blue-500 outline-none"
-                      value={newObs}
-                      onChange={(e) => setNewObs(e.target.value)}
-                    />
                   </div>
 
                   {/* Botão Urgente */}
@@ -1082,18 +906,7 @@ export const PurchaseRequests: React.FC<PurchaseRequestsProps> = ({
                       onClick={async () => {
                         try {
                           const newUrgentVal = !req.urgente;
-                          setLocalRequests(prev => {
-                            const next = prev.map(r => r.id === req.id ? { ...r, urgente: newUrgentVal } : r);
-                            try {
-                              localStorage.setItem(`app_cache_${getDataPath('purchaseRequests')}`, JSON.stringify(next));
-                            } catch {}
-                            return next;
-                          });
-                          window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { ...req, urgente: newUrgentVal } }));
-
-                          await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), req.id!), {
-                            urgente: newUrgentVal
-                          });
+                          await purchaseRequestsStore.updateRequest(req.id!, { urgente: newUrgentVal });
                           await logAction('Edição', 'Pedido Compra', `Marcou pedido de "${req.produto}" como ${newUrgentVal ? 'URGENTE' : 'não urgente'}`, 'purchaseRequests', req.id!, { ...req, urgente: newUrgentVal });
                         } catch (err) {
                           console.error('Erro ao atualizar urgência:', err);

@@ -52,6 +52,7 @@ import { logAction } from '../lib/logs';
 import { safeSetDoc, safeAddDoc, safeUpdateDoc } from '../lib/firestoreUtils';
 import { StockItem, PurchaseRequest } from '../types';
 import { cn, formatCurrency, getDataPath, getBasePath } from '../lib/utils';
+import { purchaseRequestsStore } from '../lib/purchaseRequestsStore';
 import { 
   PREDEFINED_STOCK_ITEMS, 
   PredefinedStockItem, 
@@ -998,18 +999,19 @@ export const StockCounting: React.FC<StockCountingProps> = ({
       let regularOrdersCount = 0;
       let itemsUpdatedCount = 0;
 
-      // Buscar pedidos de compra atualmente pendentes para evitar duplicados
-      const pendingSnap = await getDocs(
-        query(collection(db, getDataPath('purchaseRequests')), where('status', '==', 'pendente'))
-      );
+      // Buscar pedidos de compra ativos (pendentes e comprados) via store dedicada para evitar duplicados e proteger pedidos manuais
+      const latestRequests = await purchaseRequestsStore.forceRefresh();
       const existingPendingMap = new Map<string, { id: string; isManual: boolean }>();
-      pendingSnap.docs.forEach(docSnap => {
-        const data = docSnap.data();
-        const prod = (data.produto || '').toLowerCase().trim();
-        const solicitante = String(data.usuarioSolicitante || '').toLowerCase();
-        const isManual = !solicitante.includes('contagem') && !solicitante.includes('produção') && !solicitante.includes('sistema');
-        if (prod) {
-          existingPendingMap.set(prod, { id: docSnap.id, isManual });
+      const existingBoughtSet = new Set<string>();
+      latestRequests.forEach(reqItem => {
+        const prod = (reqItem.produto || '').toLowerCase().trim();
+        if (!prod) return;
+        if (reqItem.status === 'comprado') {
+          existingBoughtSet.add(prod);
+        } else if (reqItem.status === 'pendente' && reqItem.id) {
+          const solicitante = String(reqItem.usuarioSolicitante || '').toLowerCase();
+          const isManual = !solicitante.includes('contagem') && !solicitante.includes('produção') && !solicitante.includes('sistema');
+          existingPendingMap.set(prod, { id: reqItem.id, isManual });
         }
       });
 
@@ -1153,6 +1155,11 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           const normalizedProdName = def.produto.toLowerCase().trim();
           const existingInfo = existingPendingMap.get(normalizedProdName);
 
+          if (existingBoughtSet.has(normalizedProdName)) {
+            // Item já foi comprado e está na coluna "Confirmar Recebimento (Chegou)". Não duplicar em "Precisa Comprar".
+            continue;
+          }
+
           if (existingInfo && existingInfo.isManual) {
             // Se já existe um pedido manual criado pelo atendente/gestor, NÃO sobrescrever! Preservar intacto.
             continue;
@@ -1267,17 +1274,9 @@ export const StockCounting: React.FC<StockCountingProps> = ({
           try {
             const { existingId, ...reqData } = req;
             if (existingId) {
-              await safeUpdateDoc(doc(db, getDataPath('purchaseRequests'), existingId), {
-                ...reqData,
-                updatedAt: serverTimestamp()
-              });
-              window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { id: existingId, ...reqData } }));
+              await purchaseRequestsStore.updateRequest(existingId, reqData);
             } else {
-              const docRef = await safeAddDoc(collection(db, getDataPath('purchaseRequests')), {
-                ...reqData,
-                createdAt: serverTimestamp()
-              });
-              window.dispatchEvent(new CustomEvent('purchase-requests-updated', { detail: { id: docRef?.id, ...reqData } }));
+              await purchaseRequestsStore.createRequest(reqData);
             }
           } catch (err) {
             console.error('Erro ao adicionar pedido de compra / produção:', err);

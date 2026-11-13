@@ -21,6 +21,10 @@ export const getDataPath = (subcollection?: string): string => {
   return subcollection ? `${base}/${subcollection}` : base;
 };
 
+export const getPurchaseRequestsPath = (): string => {
+  return getDataPath('purchaseRequests');
+};
+
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',

@@ -5,75 +5,310 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import cron from "node-cron";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc, collection, serverTimestamp, Firestore } from "firebase/firestore";
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
+const DEFAULT_ALFA_TOKEN = process.env.ALFA_LABS_TOKEN || "7e00399e6a8823af50e5a841b8f158821f91b685";
 
-// Schedule cron job to run daily at 06:00 AM (0 6 * * *)
-cron.schedule("0 6 * * *", async () => {
-  console.log("[Cron 06:00 AM] Executing automatic daily sales sync from Alfalabs API...");
+let serverDbInstance: Firestore | null = null;
+
+function getServerDb(): Firestore {
+  if (serverDbInstance) return serverDbInstance;
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+  serverDbInstance = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  return serverDbInstance;
+}
+
+function getSaoPauloDateParts(date = new Date()) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  });
+  const parts: Record<string, string> = {};
+  for (const p of fmt.formatToParts(date)) {
+    parts[p.type] = p.value;
+  }
+  return {
+    dateStr: `${parts.year}-${parts.month}-${parts.day}`,
+    hour: Number(parts.hour) % 24,
+    minute: Number(parts.minute)
+  };
+}
+
+function getSaoPauloYesterdayDateStr(now = new Date()): string {
+  const todayBr = getSaoPauloDateParts(now).dateStr;
+  const [y, m, d] = todayBr.split("-").map(Number);
+  const utcDate = new Date(Date.UTC(y, m - 1, d));
+  utcDate.setUTCDate(utcDate.getUTCDate() - 1);
+  return utcDate.toISOString().split("T")[0];
+}
+
+function getWeeklyCycleFromDateStr(dateStr: string) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const day = dt.getUTCDay(); // 0:Sun, 1:Mon, ..., 4:Thu
+  const diffToThu = day >= 4 ? day - 4 : day + 3;
+  const startThu = new Date(dt);
+  startThu.setUTCDate(dt.getUTCDate() - diffToThu);
+  const endWed = new Date(startThu);
+  endWed.setUTCDate(startThu.getUTCDate() + 6);
+  const fmtUtc = (x: Date) => x.toISOString().split("T")[0];
+  return {
+    weekKey: fmtUtc(startThu),
+    startDate: fmtUtc(startThu),
+    endDate: fmtUtc(endWed)
+  };
+}
+
+async function resolveAlfaToken(dataPath: string, overrideToken?: string): Promise<string> {
+  if (overrideToken && overrideToken.trim()) {
+    return overrideToken.replace(/^Bearer\s+/i, "").trim();
+  }
   try {
-    const token = "7e00399e6a8823af50e5a841b8f158821f91b685";
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const targetDate = d.toISOString().split("T")[0];
-    
-    console.log(`[Cron 06:00 AM] Fetching orders for date: ${targetDate}`);
-    const url = `https://api.alfalabs.com.br/v2/orders?date=${targetDate}`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+    const db = getServerDb();
+    const settingsSnap = await getDoc(doc(db, `${dataPath}/systemSettings`, "alfaLabs"));
+    if (settingsSnap.exists()) {
+      const saved = settingsSnap.data()?.token;
+      if (typeof saved === "string" && saved.trim()) {
+        return saved.replace(/^Bearer\s+/i, "").trim();
       }
-    });
-
-    if (response.ok) {
-      const json: any = await response.json();
-      let items: any[] = [];
-      if (Array.isArray(json)) {
-        items = json;
-      } else if (json.orders && Array.isArray(json.orders)) {
-        items = json.orders;
-      } else if (json.data && Array.isArray(json.data)) {
-        items = json.data;
-      } else if (json.items && Array.isArray(json.items)) {
-        items = json.items;
-      } else {
-        items = [json];
-      }
-
-      let dayNetSum = 0;
-      items.forEach((order: any) => {
-        const orderNetTotal = Number(
-          order.total?.orderAmount || 
-          (Number(order.total?.subTotal || 0) - Number(order.discountDetails?.discount || order.total?.discount || 0)) || 
-          order.total?.subTotal || 
-          0
-        );
-        if (orderNetTotal > 0) {
-          dayNetSum += orderNetTotal;
-        }
-      });
-
-      console.log(`[Cron 06:00 AM] Sucesso! Data: ${targetDate}, Pedidos: ${items.length}, Total Líquido (Metas): R$ ${dayNetSum.toFixed(2)}`);
-      const cronLogPath = path.join(process.cwd(), 'alfa_labs_cron_log.json');
-      const logData = {
-        lastRun: new Date().toISOString(),
-        targetDate,
-        ordersCount: items.length,
-        totalNetSales: dayNetSum,
-        success: true
-      };
-      fs.writeFileSync(cronLogPath, JSON.stringify(logData, null, 2));
-    } else {
-      console.warn(`[Cron 06:00 AM] Falha na API Alfalabs: Status ${response.status}`);
     }
   } catch (err) {
-    console.error("[Cron 06:00 AM] Erro ao executar sincronização automática:", err);
+    console.warn("[Alfalabs AutoSync] Não foi possível ler token em systemSettings, usando padrão:", err);
   }
-});
+  return DEFAULT_ALFA_TOKEN;
+}
+
+async function fetchAlfalabsNetSalesForDate(targetDate: string, token: string): Promise<{ ordersCount: number; validOrdersCount: number; totalNetSales: number }> {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json"
+  };
+
+  const extractOrders = (json: any): any[] => {
+    if (Array.isArray(json)) return json;
+    if (json?.orders && Array.isArray(json.orders)) return json.orders;
+    if (json?.data && Array.isArray(json.data)) return json.data;
+    if (json?.items && Array.isArray(json.items)) return json.items;
+    return json && typeof json === "object" && json.id ? [json] : [];
+  };
+
+  const firstUrl = `https://api.alfalabs.com.br/v2/orders?date=${targetDate}`;
+  const firstRes = await fetch(firstUrl, { headers });
+  if (!firstRes.ok) {
+    const errText = await firstRes.text().catch(() => "");
+    throw new Error(`Alfalabs API HTTP ${firstRes.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const firstJson: any = await firstRes.json();
+  const seenIds = new Set<string>();
+  const allOrders: any[] = [];
+
+  const pushUnique = (list: any[]) => {
+    for (const o of list) {
+      const oid = o?.id !== undefined && o?.id !== null ? String(o.id) : `${allOrders.length}_${Math.random()}`;
+      if (!seenIds.has(oid)) {
+        seenIds.add(oid);
+        allOrders.push(o);
+      }
+    }
+  };
+
+  pushUnique(extractOrders(firstJson));
+
+  const totalPages = Number(firstJson?.totalPags || 1);
+  if (totalPages > 1 && totalPages <= 50) {
+    for (let page = 2; page <= totalPages; page++) {
+      const pageUrl = `https://api.alfalabs.com.br/v2/orders?date=${targetDate}&page=${page}`;
+      const pageRes = await fetch(pageUrl, { headers });
+      if (pageRes.ok) {
+        const pageJson = await pageRes.json();
+        pushUnique(extractOrders(pageJson));
+      }
+    }
+  }
+
+  let dayNetSum = 0;
+  let validOrdersCount = 0;
+
+  for (const order of allOrders) {
+    const statusLower = String(order.status || "").toLowerCase();
+    if (statusLower.includes("cancel")) continue;
+
+    validOrdersCount++;
+    const rawOrderAmount = order.total?.orderAmount;
+    const subTotal = Number(order.total?.subTotal || 0);
+    const discount = Number(order.discountDetails?.discount || order.total?.discount || 0);
+    const orderNetTotal = (rawOrderAmount !== undefined && rawOrderAmount !== null)
+      ? Number(rawOrderAmount)
+      : Math.max(0, subTotal - discount);
+
+    if (orderNetTotal > 0) {
+      dayNetSum += orderNetTotal;
+    }
+  }
+
+  const roundedTotal = Math.round(dayNetSum * 100) / 100;
+  return {
+    ordersCount: allOrders.length,
+    validOrdersCount,
+    totalNetSales: roundedTotal
+  };
+}
+
+const activeSyncLocks = new Map<string, Promise<any>>();
+
+async function syncDailyGoalToFirestore(options: {
+  targetDate?: string;
+  dataPath?: string;
+  token?: string;
+  forceOverwrite?: boolean;
+  triggerSource?: string;
+} = {}) {
+  const targetDate = options.targetDate || getSaoPauloYesterdayDateStr();
+  const dataPath = options.dataPath || (process.env.NODE_ENV === "production" ? "users/shared_franquia_data" : "users/dev_qa_franquia_data");
+  const lockKey = `${dataPath}::${targetDate}::${options.forceOverwrite ? "force" : "safe"}`;
+
+  if (activeSyncLocks.has(lockKey)) {
+    return activeSyncLocks.get(lockKey);
+  }
+
+  const task = (async () => {
+    const db = getServerDb();
+    const { weekKey, startDate, endDate } = getWeeklyCycleFromDateStr(targetDate);
+    const goalDocRef = doc(db, `${dataPath}/weeklyGoals`, weekKey);
+
+    let existingData: any = {};
+    let existingDailySales: Record<string, number> = {};
+
+    const existingSnap = await getDoc(goalDocRef);
+    if (existingSnap.exists()) {
+      existingData = existingSnap.data() || {};
+      if (existingData.dailySales && typeof existingData.dailySales === "object") {
+        existingDailySales = { ...existingData.dailySales };
+      }
+    }
+
+    if (!options.forceOverwrite && existingDailySales[targetDate] !== undefined) {
+      return {
+        success: true,
+        targetDate,
+        weekKey,
+        dataPath,
+        alreadyFilled: true,
+        updated: false,
+        totalNetSales: existingDailySales[targetDate]
+      };
+    }
+
+    const token = await resolveAlfaToken(dataPath, options.token);
+    const { ordersCount, validOrdersCount, totalNetSales } = await fetchAlfalabsNetSalesForDate(targetDate, token);
+
+    const updatedDailySales = {
+      ...existingDailySales,
+      [targetDate]: totalNetSales
+    };
+
+    await setDoc(goalDocRef, {
+      weekKey,
+      startDate: existingData.startDate || startDate,
+      endDate: existingData.endDate || endDate,
+      previousYearSales: existingData.previousYearSales ?? 0,
+      dailySales: updatedDailySales,
+      userId: existingData.userId || dataPath,
+      updatedAt: serverTimestamp(),
+      ...(existingSnap.exists() ? {} : { createdAt: serverTimestamp() })
+    }, { merge: true });
+
+    // Audit log matching isValidSystemLog
+    try {
+      const todayBr = getSaoPauloDateParts().dateStr;
+      const logRef = doc(collection(db, `${dataPath}/systemLogs`));
+      await setDoc(logRef, {
+        data: todayBr,
+        timestamp: serverTimestamp(),
+        usuario: options.triggerSource || "Robô 06:00 (Alfalabs)",
+        acao: "Criação",
+        tipo: "POS API Metas",
+        descricao: `Sincronização automática (${options.triggerSource || "Robô 06:00"}): faturamento líquido de ${targetDate} atualizado para R$ ${totalNetSales.toFixed(2)} (${validOrdersCount} pedidos válidos).`,
+        detalhesRef: {
+          collection: "weeklyGoals",
+          docId: weekKey,
+          payload: { targetDate, totalNetSales, ordersCount, validOrdersCount }
+        }
+      });
+    } catch (logErr) {
+      console.warn("[Alfalabs AutoSync] Log gravado com aviso:", logErr);
+    }
+
+    try {
+      const cronLogPath = path.join(process.cwd(), "alfa_labs_cron_log.json");
+      fs.writeFileSync(cronLogPath, JSON.stringify({
+        lastRun: new Date().toISOString(),
+        lastRunBr: getSaoPauloDateParts(),
+        targetDate,
+        weekKey,
+        dataPath,
+        ordersCount,
+        validOrdersCount,
+        totalNetSales,
+        triggerSource: options.triggerSource || "cron",
+        success: true
+      }, null, 2));
+    } catch {}
+
+    console.log(`[Alfalabs AutoSync] Sucesso (${options.triggerSource || "cron"})! Ambiente: ${dataPath} | Data: ${targetDate} | Pedidos Válidos: ${validOrdersCount}/${ordersCount} | Total Líquido (Metas): R$ ${totalNetSales.toFixed(2)}`);
+
+    return {
+      success: true,
+      targetDate,
+      weekKey,
+      dataPath,
+      alreadyFilled: false,
+      updated: true,
+      ordersCount,
+      validOrdersCount,
+      totalNetSales
+    };
+  })();
+
+  activeSyncLocks.set(lockKey, task);
+  try {
+    return await task;
+  } finally {
+    activeSyncLocks.delete(lockKey);
+  }
+}
+
+// Schedule cron job to run daily at 06:00 AM Brasília Time (America/Sao_Paulo)
+cron.schedule(
+  "0 6 * * *",
+  async () => {
+    console.log("[Cron 06:00 AM BRT] Executando sincronização automática diária de metas (Alfalabs API)...");
+    try {
+      const targetDate = getSaoPauloYesterdayDateStr();
+      await syncDailyGoalToFirestore({
+        targetDate,
+        forceOverwrite: false,
+        triggerSource: "Robô 06:00 AM"
+      });
+    } catch (err) {
+      console.error("[Cron 06:00 AM BRT] Erro ao executar sincronização automática:", err);
+    }
+  },
+  { timezone: "America/Sao_Paulo" }
+);
 
 // Increase payload size limit to digest base64 documents safely
 app.use(express.json({ limit: "50mb" }));
@@ -673,6 +908,27 @@ app.post("/api/test-pos-api", async (req, res) => {
   }
 });
 
+// Endpoint para garantir/executar a atualização diária de faturamento de ontem na sessão de Metas (chamado pelo robô ou catch-up ao abrir o app)
+app.post("/api/alfalabs/sync-daily-goal", async (req, res) => {
+  try {
+    const { date, dataPath, token, forceOverwrite = false, triggerSource = "Catch-up App" } = req.body || {};
+    const result = await syncDailyGoalToFirestore({
+      targetDate: date || getSaoPauloYesterdayDateStr(),
+      dataPath,
+      token,
+      forceOverwrite: Boolean(forceOverwrite),
+      triggerSource
+    });
+    res.json(result);
+  } catch (error: any) {
+    console.error("[Alfalabs AutoSync] Erro no endpoint /api/alfalabs/sync-daily-goal:", error);
+    res.status(500).json({
+      success: false,
+      error: error?.message || "Erro ao sincronizar faturamento diário com Firestore."
+    });
+  }
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
@@ -698,6 +954,24 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+
+    // Catch-up automático caso o servidor tenha acordado depois das 06:00 BRT
+    setTimeout(async () => {
+      try {
+        const brNow = getSaoPauloDateParts();
+        if (brNow.hour >= 6) {
+          const targetDate = getSaoPauloYesterdayDateStr();
+          console.log(`[Startup Catch-up] Verificando meta diária de ontem (${targetDate}) às ${brNow.hour}:${String(brNow.minute).padStart(2, "0")} BRT...`);
+          await syncDailyGoalToFirestore({
+            targetDate,
+            forceOverwrite: false,
+            triggerSource: "Robô 06:00 AM (Catch-up Inicialização)"
+          });
+        }
+      } catch (err) {
+        console.warn("[Startup Catch-up] Falha ao verificar/sincronizar meta diária na inicialização:", err);
+      }
+    }, 4000);
   });
 }
 

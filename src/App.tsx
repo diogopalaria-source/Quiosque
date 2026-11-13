@@ -64,12 +64,14 @@ import {
   writeBatch, 
   doc, 
   deleteDoc, 
+  getDoc,
   getDocs,
   serverTimestamp,
   updateDoc
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { OperationType, handleFirestoreError } from './lib/firestoreUtils';
+import { purchaseRequestsStore } from './lib/purchaseRequestsStore';
 
 type Tab = 'dashboard' | 'upload' | 'cashflow' | 'indicators' | 'waste' | 'inventory' | 'logs' | 'stock_count';
 
@@ -264,37 +266,6 @@ export default function App() {
   const [alfaValidating, setAlfaValidating] = useState<boolean>(false);
   const [alfaValidationResult, setAlfaValidationResult] = useState<any | null>(null);
   const [alfaValidationError, setAlfaValidationError] = useState<string | null>(null);
-
-  // Sync purchase requests across events with instant state update
-  useEffect(() => {
-    const handlePrUpdated = (e: any) => {
-      const item = e.detail;
-      if (item && item.id) {
-        setPurchaseRequestsData(prev => [item, ...prev.filter(p => p.id !== item.id)]);
-      }
-    };
-    const handlePrSynced = (e: any) => {
-      const items = e.detail;
-      if (Array.isArray(items)) {
-        setPurchaseRequestsData(items);
-      }
-    };
-    const handlePrDeleted = (e: any) => {
-      const id = e.detail;
-      if (id) {
-        setPurchaseRequestsData(prev => prev.filter(p => p.id !== id));
-      }
-    };
-
-    window.addEventListener('purchase-requests-updated', handlePrUpdated);
-    window.addEventListener('purchase-requests-synced', handlePrSynced);
-    window.addEventListener('purchase-requests-deleted', handlePrDeleted);
-    return () => {
-      window.removeEventListener('purchase-requests-updated', handlePrUpdated);
-      window.removeEventListener('purchase-requests-synced', handlePrSynced);
-      window.removeEventListener('purchase-requests-deleted', handlePrDeleted);
-    };
-  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -626,6 +597,99 @@ export default function App() {
   // Atendentes também salvam no caminho compartilhado para que o dono veja
   const dataPath = (isAuthorized || isAttendant) ? getBasePath() : null;
 
+  // Sincronização dedicada da Solicitação de Compras (Outbox persistente + Streams separados sem limit)
+  useEffect(() => {
+    if (!dataPath) {
+      setPurchaseRequestsData([]);
+      return;
+    }
+    const unsubscribe = purchaseRequestsStore.subscribe((items) => {
+      setPurchaseRequestsData(items);
+    });
+    return () => unsubscribe();
+  }, [dataPath]);
+
+  useEffect(() => {
+    if (!dataPath) return;
+    void purchaseRequestsStore.forceRefresh();
+  }, [dataPath, isGiseleMode, user?.uid]);
+
+  // Catch-up automático do robô das 06:00 BRT: garante que o faturamento de ontem nas Metas seja preenchido caso o servidor tenha hibernado de madrugada
+  useEffect(() => {
+    if (!dataPath) return;
+
+    const ensureYesterdayDailyGoal = async () => {
+      try {
+        const now = new Date();
+        const fmt = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          hour12: false
+        });
+        const parts: Record<string, string> = {};
+        for (const p of fmt.formatToParts(now)) {
+          parts[p.type] = p.value;
+        }
+        const brHour = Number(parts.hour) % 24;
+        if (brHour < 6) return;
+
+        const todayBr = `${parts.year}-${parts.month}-${parts.day}`;
+        const [y, m, d] = todayBr.split('-').map(Number);
+        const utcYest = new Date(Date.UTC(y, m - 1, d));
+        utcYest.setUTCDate(utcYest.getUTCDate() - 1);
+        const yesterdayStr = utcYest.toISOString().split('T')[0];
+
+        const cacheFlagKey = `alfa_goal_autosync_${dataPath}_${yesterdayStr}`;
+        if (localStorage.getItem(cacheFlagKey) === 'true') return;
+
+        // Calcula weekKey (ciclo Quinta -> Quarta) da data de ontem
+        const dt = new Date(Date.UTC(utcYest.getUTCFullYear(), utcYest.getUTCMonth(), utcYest.getUTCDate(), 12, 0, 0));
+        const dayOfWeek = dt.getUTCDay();
+        const diffToThu = dayOfWeek >= 4 ? dayOfWeek - 4 : dayOfWeek + 3;
+        const startThu = new Date(dt);
+        startThu.setUTCDate(dt.getUTCDate() - diffToThu);
+        const weekKey = startThu.toISOString().split('T')[0];
+
+        // Se já houver valor preenchido (manual ou pelo cron), não sobrescrever nem chamar API
+        const goalSnap = await getDoc(doc(db, `${dataPath}/weeklyGoals`, weekKey));
+        if (goalSnap.exists()) {
+          const existingDaily = goalSnap.data()?.dailySales;
+          if (existingDaily && existingDaily[yesterdayStr] !== undefined) {
+            localStorage.setItem(cacheFlagKey, 'true');
+            return;
+          }
+        }
+
+        const savedToken = localStorage.getItem('pos_api_token') || undefined;
+        const res = await fetch('/api/alfalabs/sync-daily-goal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: yesterdayStr,
+            dataPath,
+            token: savedToken,
+            forceOverwrite: false,
+            triggerSource: 'Robô 06:00 AM (Catch-up Acesso)'
+          })
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          if (result?.success) {
+            localStorage.setItem(cacheFlagKey, 'true');
+          }
+        }
+      } catch {
+        // Silencioso para nunca interromper a navegação do operador
+      }
+    };
+
+    void ensureYesterdayDailyGoal();
+  }, [dataPath]);
+
   // Firestore Sync
   useEffect(() => {
     if (!dataPath) {
@@ -649,7 +713,6 @@ export default function App() {
       { name: 'wasteRecords', setter: setWasteData },
       { name: 'staffConsumption', setter: setStaffConsumptionData },
       { name: 'staffPayments', setter: setStaffPaymentsData },
-      { name: 'purchaseRequests', setter: setPurchaseRequestsData },
       { name: 'recipes', setter: setRecipesData },
       { name: 'staffDiscountOverrides', setter: setStaffDiscountOverrides },
     ];
@@ -768,20 +831,6 @@ export default function App() {
       setWasteData(prev => prev.filter(i => i.id !== id));
     };
 
-    const handlePurchaseRequestsUpdated = (e: any) => {
-      const item = e.detail;
-      setPurchaseRequestsData(prev => {
-        const map = new Map(prev.map(i => [i.id, i]));
-        if (item && item.id) map.set(item.id, { ...map.get(item.id), ...item });
-        return Array.from(map.values());
-      });
-    };
-
-    const handlePurchaseRequestsDeleted = (e: any) => {
-      const id = e.detail;
-      setPurchaseRequestsData(prev => prev.filter(i => i.id !== id));
-    };
-
     const handleStaffOverridesUpdated = (e: any) => {
       const item = e.detail;
       setStaffDiscountOverrides(prev => {
@@ -801,8 +850,6 @@ export default function App() {
     window.addEventListener('staff-payments-deleted', handleStaffPayDeleted);
     window.addEventListener('waste-records-updated', handleWasteUpdated);
     window.addEventListener('waste-records-deleted', handleWasteDeleted);
-    window.addEventListener('purchase-requests-updated', handlePurchaseRequestsUpdated);
-    window.addEventListener('purchase-requests-deleted', handlePurchaseRequestsDeleted);
     window.addEventListener('staff-overrides-updated', handleStaffOverridesUpdated);
     window.addEventListener('staff-overrides-deleted', handleStaffOverridesDeleted);
 
@@ -813,8 +860,6 @@ export default function App() {
       window.removeEventListener('staff-payments-deleted', handleStaffPayDeleted);
       window.removeEventListener('waste-records-updated', handleWasteUpdated);
       window.removeEventListener('waste-records-deleted', handleWasteDeleted);
-      window.removeEventListener('purchase-requests-updated', handlePurchaseRequestsUpdated);
-      window.removeEventListener('purchase-requests-deleted', handlePurchaseRequestsDeleted);
       window.removeEventListener('staff-overrides-updated', handleStaffOverridesUpdated);
       window.removeEventListener('staff-overrides-deleted', handleStaffOverridesDeleted);
     };
@@ -917,58 +962,6 @@ export default function App() {
       console.log('--- STARTING RESILIENT STOCK AND PURCHASES DATA PATCHING ---');
       try {
         const { getDocs, deleteDoc, updateDoc, doc, collection } = await import('firebase/firestore');
-
-        // 1. Correct purchaseRequests
-        try {
-          const prSnap = await getDocs(collection(db, `${dataPath}/purchaseRequests`));
-          for (const d of prSnap.docs) {
-            try {
-              const req = d.data();
-              const name = String(req.produto || '').toLowerCase().trim();
-              
-              if (name.includes('macadamia') || name.includes('macadâmia')) {
-                console.log(`Deletando pedido de macadamia: ${d.id}`);
-                await deleteDoc(doc(db, `${dataPath}/purchaseRequests`, d.id));
-              } else if (name.includes('batata doce') || (name.includes('pão de queijo') && name.includes('batata') && !name.includes('bacon'))) {
-                const qtyNum = Number(req.quantidadeNumerica) || Number(req.quantidade?.split(' ')[0]) || 1;
-                const newUnit = 1.54;
-                const newTotal = Number((newUnit * qtyNum).toFixed(2));
-                await updateDoc(doc(db, `${dataPath}/purchaseRequests`, d.id), {
-                  valorUnitario: newUnit,
-                  valorTotal: newTotal
-                });
-              } else if (name.includes('sopa de bacon') || name.includes('sopa bacon') || name.includes('batata com bacon') || name.includes('batata e bacon')) {
-                const qtyNum = Number(req.quantidadeNumerica) || Number(req.quantidade?.split(' ')[0]) || 1;
-                const newUnit = 17.00;
-                const newTotal = Number((newUnit * qtyNum).toFixed(2));
-                await updateDoc(doc(db, `${dataPath}/purchaseRequests`, d.id), {
-                  valorUnitario: newUnit,
-                  valorTotal: newTotal
-                });
-              } else if (name.includes('caldo verde')) {
-                const qtyNum = Number(req.quantidadeNumerica) || Number(req.quantidade?.split(' ')[0]) || 1;
-                const newUnit = 17.00;
-                const newTotal = Number((newUnit * qtyNum).toFixed(2));
-                await updateDoc(doc(db, `${dataPath}/purchaseRequests`, d.id), {
-                  valorUnitario: newUnit,
-                  valorTotal: newTotal
-                });
-              } else if (name.includes('mandioquinha')) {
-                const qtyNum = Number(req.quantidadeNumerica) || Number(req.quantidade?.split(' ')[0]) || 1;
-                const newUnit = 15.00;
-                const newTotal = Number((newUnit * qtyNum).toFixed(2));
-                await updateDoc(doc(db, `${dataPath}/purchaseRequests`, d.id), {
-                  valorUnitario: newUnit,
-                  valorTotal: newTotal
-                });
-              }
-            } catch (singleItemErr) {
-              console.warn(`Alerta de permissão ou de validação ao corrigir purchaseRequest individual ${d.id}:`, singleItemErr);
-            }
-          }
-        } catch (catErr) {
-          console.warn('Coleção branch de purchaseRequests pulada devido a restrições de leitura:', catErr);
-        }
 
         // 2. Correct purchases
         try {

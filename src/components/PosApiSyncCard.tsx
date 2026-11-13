@@ -1,27 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, CheckCircle2, AlertCircle, Globe, Key, RefreshCw, Database } from 'lucide-react';
 import { cn, getDataPath } from '../lib/utils';
-import { collection, doc, setDoc, query, getDocs, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { format, parseISO, addDays } from 'date-fns';
 import { logAction } from '../lib/logs';
-import { WeeklyGoalRecord } from '../types';
-
-function getWeeklyCycle(date = new Date()) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diffToThu = day >= 4 ? day - 4 : day + 3;
-  const startThu = new Date(d);
-  startThu.setDate(d.getDate() - diffToThu);
-  startThu.setHours(0, 0, 0, 0);
-
-  const endWed = new Date(startThu);
-  endWed.setDate(startThu.getDate() + 6);
-  endWed.setHours(23, 59, 59, 999);
-
-  const weekKey = format(startThu, 'yyyy-MM-dd');
-  return { startThu, endWed, weekKey };
-}
 
 export const PosApiSyncCard: React.FC = () => {
   const [apiUrl, setApiUrl] = useState('https://api.alfalabs.com.br/v2/orders?date=2026-11-11');
@@ -45,6 +27,13 @@ export const PosApiSyncCard: React.FC = () => {
     try {
       localStorage.setItem('pos_api_token', token);
     } catch {}
+    if (token.trim()) {
+      setDoc(
+        doc(db, getDataPath('systemSettings'), 'alfaLabs'),
+        { token: token.replace(/^Bearer\s+/i, '').trim(), updatedAt: serverTimestamp() },
+        { merge: true }
+      ).catch(() => {});
+    }
   };
 
   const handleSyncDailyGoalsOnly = async (targetRange: 'yesterday' | 'nov_1_to_11') => {
@@ -53,18 +42,29 @@ export const PosApiSyncCard: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      let headersObj: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authHeader.trim()) {
-        headersObj['Authorization'] = authHeader.startsWith('Bearer ') || authHeader.startsWith('Basic ') 
-          ? authHeader 
-          : `Bearer ${authHeader}`;
+      const cleanToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+      if (cleanToken) {
+        setDoc(
+          doc(db, getDataPath('systemSettings'), 'alfaLabs'),
+          { token: cleanToken, updatedAt: serverTimestamp() },
+          { merge: true }
+        ).catch(() => {});
       }
 
       const datesToFetch: string[] = [];
       if (targetRange === 'yesterday') {
-        const y = new Date();
-        y.setDate(y.getDate() - 1);
-        datesToFetch.push(format(y, 'yyyy-MM-dd'));
+        const now = new Date();
+        const fmt = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const parts: Record<string, string> = {};
+        for (const p of fmt.formatToParts(now)) parts[p.type] = p.value;
+        const utcYest = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+        utcYest.setUTCDate(utcYest.getUTCDate() - 1);
+        datesToFetch.push(utcYest.toISOString().split('T')[0]);
       } else if (targetRange === 'nov_1_to_11') {
         for (let d = 1; d <= 11; d++) {
           const dayStr = d < 10 ? `0${d}` : `${d}`;
@@ -76,89 +76,29 @@ export const PosApiSyncCard: React.FC = () => {
       const dailyTotalsMap: Record<string, number> = {};
 
       for (const dateStr of datesToFetch) {
-        const url = `https://api.alfalabs.com.br/v2/orders?date=${dateStr}`;
-        const res = await fetch('/api/test-pos-api', {
+        const res = await fetch('/api/alfalabs/sync-daily-goal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            url,
-            method: 'GET',
-            headers: headersObj
+            date: dateStr,
+            dataPath: currentEnvironment,
+            token: cleanToken || undefined,
+            forceOverwrite: true,
+            triggerSource: 'Sincronização Manual Admin'
           })
         });
 
         const apiRes = await res.json();
-        if (apiRes.success && apiRes.data) {
-          let items: any[] = [];
-          if (Array.isArray(apiRes.data)) {
-            items = apiRes.data;
-          } else if (apiRes.data.orders && Array.isArray(apiRes.data.orders)) {
-            items = apiRes.data.orders;
-          } else if (apiRes.data.data && Array.isArray(apiRes.data.data)) {
-            items = apiRes.data.data;
-          } else if (apiRes.data.items && Array.isArray(apiRes.data.items)) {
-            items = apiRes.data.items;
-          } else {
-            items = [apiRes.data];
-          }
-
-          totalSyncedOrders += items.length;
-          let dayNetSum = 0;
-
-          items.forEach((order: any) => {
-            // Net order amount for daily goals (desconsiderando descontos para as metas dia a dia)
-            const orderNetTotal = Number(
-              order.total?.orderAmount || 
-              (Number(order.total?.subTotal || 0) - Number(order.discountDetails?.discount || order.total?.discount || 0)) || 
-              order.total?.subTotal || 
-              0
-            );
-            if (orderNetTotal > 0) {
-              dayNetSum += orderNetTotal;
-            }
-          });
-
-          dailyTotalsMap[dateStr] = dayNetSum;
+        if (!res.ok || !apiRes?.success) {
+          throw new Error(apiRes?.error || `Erro ao sincronizar data ${dateStr}`);
         }
-      }
-
-      // Update weeklyGoals dailySales for each date (strictly metas, sales collection untouched)
-      for (const [dateKey, daySum] of Object.entries(dailyTotalsMap)) {
-        const dt = parseISO(dateKey);
-        const cycle = getWeeklyCycle(dt);
-        const weekKey = cycle.weekKey;
-        const startDt = parseISO(weekKey);
-        const endDt = addDays(startDt, 6);
-
-        const goalDocRef = doc(db, getDataPath('weeklyGoals'), weekKey);
-        
-        let existingDailySales: Record<string, number> = {};
-        try {
-          const snap = await getDocs(query(collection(db, getDataPath('weeklyGoals'))));
-          snap.forEach(d => {
-            if (d.id === weekKey) {
-              const data = d.data() as WeeklyGoalRecord;
-              if (data.dailySales) existingDailySales = { ...data.dailySales };
-            }
-          });
-        } catch {}
-
-        existingDailySales[dateKey] = daySum;
-
-        const recordUpdate: any = {
-          weekKey,
-          startDate: format(startDt, 'yyyy-MM-dd'),
-          endDate: format(endDt, 'yyyy-MM-dd'),
-          dailySales: existingDailySales,
-          userId: getDataPath(),
-          createdAt: serverTimestamp()
-        };
-        await setDoc(goalDocRef, recordUpdate, { merge: true });
+        totalSyncedOrders += Number(apiRes.validOrdersCount || apiRes.ordersCount || 0);
+        dailyTotalsMap[dateStr] = Number(apiRes.totalNetSales || 0);
       }
 
       await logAction('Criação', 'POS API Metas', `Atualizou metas diárias de faturamento via API Alfalabs (${targetRange}).`, 'weeklyGoals', 'pos_sync_metas', { targetRange, dailyTotalsMap });
 
-      setSyncMsg(`Sincronização de Metas concluída! ${totalSyncedOrders} pedidos processados. Valores líquidos (sem descontos) atualizados na Seção de Metas. Ambiente: ${currentEnvironment}`);
+      setSyncMsg(`Sincronização de Metas concluída! ${totalSyncedOrders} pedidos válidos processados (cancelados desconsiderados). Valores líquidos atualizados na Seção de Metas. Ambiente: ${currentEnvironment}`);
       setTimeout(() => setSyncMsg(null), 8000);
     } catch (err: any) {
       console.error('Sync error:', err);
